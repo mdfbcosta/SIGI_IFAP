@@ -153,6 +153,23 @@ const DB = {
         delete: (id) => deleteRow('cursos', id),
     },
 
+    // --- Turmas ---
+    turmas: {
+        fetchAll: () => fetchAll('turmas'),
+        create: (row) => insertRow('turmas', row),
+        update: (id, data) => updateRow('turmas', id, data),
+        delete: (id) => deleteRow('turmas', id),
+        async fetchByCurso(cursoId) {
+            const { data, error } = await supabaseClient
+                .from('turmas')
+                .select('*')
+                .eq('curso_id', cursoId)
+                .order('nome', { ascending: true });
+            if (error) throw error;
+            return data || [];
+        }
+    },
+
     // --- Disciplinas ---
     disciplinas: {
         fetchAll: () => fetchAll('disciplinas'),

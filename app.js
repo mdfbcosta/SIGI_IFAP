@@ -8,6 +8,7 @@ let mockInstancias = [];
 let mockServidores = [];
 let mockDisciplinas = [];
 let mockSalasManha = [];
+let mockTurmas = [];
 let mockTemplates = [];
 let mockEtapasAvaliativas = [];
 let mockGradesSemanais = {};
@@ -37,6 +38,7 @@ async function loadAllDataFromDB() {
         mockCursosCadastrados = (await DB.cursos.fetchAll()).map(c => ({
             ...c, vinculoId: c.vinculo_id, responsavelId: c.responsavel_id
         }));
+        mockTurmas = await DB.turmas.fetchAll();
         mockDisciplinas = await DB.disciplinas.fetchAll();
         mockServidores = (await DB.servidores.fetchAll()).map(s => ({
             ...s, vinculoId: s.vinculo_id
@@ -413,6 +415,10 @@ function renderLoginScreen() {
                         <div>
                             <label style="font-weight: 500; font-size: 0.9rem;">Senha</label>
                             <input type="password" id="regPassword" required minlength="6" placeholder="Mínimo 6 caracteres" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Matrícula SIAPE *</label>
+                            <input type="text" id="regSiape" required placeholder="Ex: 1234567" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                         </div>
                         <div>
                             <label style="font-weight: 500; font-size: 0.9rem;">Perfil Solicitado</label>
@@ -2082,6 +2088,7 @@ window.submitRegister = async function(e) {
     const email = document.getElementById('regEmail').value.trim().toLowerCase();
     const password = document.getElementById('regPassword').value;
     const perfil = document.getElementById('regPerfil').value;
+    const siape = document.getElementById('regSiape').value.trim();
 
     try {
         // 1. Cria a conta no Auth do Supabase
@@ -2094,6 +2101,7 @@ window.submitRegister = async function(e) {
             nome: nome,
             email: email,
             perfil: perfil,
+            siape: siape,
             tipo_conta: 'PESSOAL',
             status_cadastro: 'PENDENTE',
             auth_id: authUserId
@@ -2619,7 +2627,421 @@ window.openMod1Modal = function(modal) {
 
 window.closeMod1Modal = function() {
     appState.mod1Modal = null;
+    appState.editColegiadoId = null;
     render();
+}
+
+// ==========================================
+// COLEGIADOS CRUD ACTIONS
+// ==========================================
+window.openColegiadoModal = function() {
+    appState.editColegiadoId = null;
+    appState.mod1Modal = 'MODAL_COLEGIADO';
+    render();
+}
+
+window.editColegiado = function(id) {
+    appState.editColegiadoId = id;
+    appState.mod1Modal = 'MODAL_COLEGIADO';
+    render();
+}
+
+window.toggleStatusColegiado = async function(id, currentStatus) {
+    if (!confirm(`Deseja realmente ${currentStatus === 'INATIVO' ? 'ativar' : 'inativar'} este Colegiado?`)) return;
+    try {
+        const newStatus = currentStatus === 'INATIVO' ? 'ATIVO' : 'INATIVO';
+        await DB.colegiados.update(id, { status: newStatus });
+        showToast(`Colegiado ${newStatus.toLowerCase()} com sucesso!`);
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao atualizar: ' + e.message);
+    }
+}
+
+window.submitColegiado = async function(e) {
+    e.preventDefault();
+    const nome = document.getElementById('colNome').value.trim();
+    const sigla = document.getElementById('colSigla').value.trim();
+    const coordenadorId = document.getElementById('colCoord').value;
+    
+    const checkboxes = document.querySelectorAll('input[name="colMods"]:checked');
+    const modalidades = Array.from(checkboxes).map(cb => cb.value);
+
+    const payload = {
+        nome: nome,
+        sigla: sigla,
+        coordenador_id: coordenadorId ? parseInt(coordenadorId) : null,
+        modalidades: modalidades
+    };
+
+    try {
+        if (appState.editColegiadoId) {
+            await DB.colegiados.update(appState.editColegiadoId, payload);
+            showToast('Colegiado atualizado com sucesso!');
+        } else {
+            payload.status = 'ATIVO';
+            await DB.colegiados.create(payload);
+            showToast('Colegiado criado com sucesso!');
+        }
+        closeMod1Modal();
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+// ==========================================
+// CURSOS CRUD ACTIONS
+// ==========================================
+window.openCursoModal = function() {
+    appState.editCursoId = null;
+    appState.mod1Modal = 'MODAL_CURSO';
+    render();
+}
+
+window.editCurso = function(id) {
+    appState.editCursoId = id;
+    appState.mod1Modal = 'MODAL_CURSO';
+    render();
+}
+
+window.toggleStatusCurso = async function(id, currentStatus) {
+    if (!confirm(`Deseja realmente ${currentStatus === 'INATIVO' ? 'ativar' : 'inativar'} este Curso?`)) return;
+    try {
+        const newStatus = currentStatus === 'INATIVO' ? 'ATIVO' : 'INATIVO';
+        await DB.cursos.update(id, { status: newStatus });
+        showToast(`Curso ${newStatus.toLowerCase()} com sucesso!`);
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao atualizar: ' + e.message);
+    }
+}
+
+window.submitCurso = async function(e) {
+    e.preventDefault();
+    const modalidade = document.getElementById('modalidadeCurso').value;
+    const nome = document.getElementById('curNome').value.trim();
+    const sigla = document.getElementById('curSigla').value.trim();
+    const turno = document.getElementById('curTurno').value;
+    
+    let vinculo = 'Colegiado';
+    let vinculoId = document.getElementById('curCol').value;
+    let responsavelId = document.getElementById('curResp').value;
+    
+    if (modalidade === 'FIC' || modalidade.includes('Pós-Graduação')) {
+        vinculo = 'DEPPI';
+        vinculoId = null;
+    } else {
+        responsavelId = null; // Managed by colegiado
+    }
+
+    const payload = {
+        modalidade: modalidade,
+        nome: nome,
+        sigla: sigla,
+        turno: turno,
+        vinculo: vinculo,
+        vinculo_id: vinculoId ? parseInt(vinculoId) : null,
+        responsavel_id: responsavelId ? parseInt(responsavelId) : null
+    };
+
+    try {
+        if (appState.editCursoId) {
+            await DB.cursos.update(appState.editCursoId, payload);
+            showToast('Curso atualizado com sucesso!');
+        } else {
+            payload.status = 'ATIVO';
+            await DB.cursos.create(payload);
+            showToast('Curso criado com sucesso!');
+            closeMod1Modal(); // Only close on create, to let user manage turmas on edit
+        }
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+// ==========================================
+// TURMAS CRUD ACTIONS
+// ==========================================
+window.submitNovaTurma = async function(cursoId) {
+    const nome = document.getElementById('novaTurmaNome').value.trim();
+    const modalidade = document.getElementById('novaTurmaMod').value;
+    
+    if (!nome) {
+        alert('Por favor, informe o nome da turma.');
+        return;
+    }
+
+    try {
+        await DB.turmas.create({
+            curso_id: cursoId,
+            nome: nome,
+            modalidade: modalidade,
+            status: 'ATIVA'
+        });
+        showToast('Turma adicionada com sucesso!');
+        await loadAllDataFromDB();
+        render(); // Re-renders the modal with the new turma
+    } catch (err) {
+        alert('Erro ao salvar turma: ' + err.message);
+    }
+}
+
+window.inativarTurma = async function(id, currentStatus) {
+    // Cycles between ATIVA, INATIVA, FORMADA
+    const nextStatus = currentStatus === 'ATIVA' ? 'INATIVA' : (currentStatus === 'INATIVA' ? 'FORMADA' : 'ATIVA');
+    try {
+        await DB.turmas.update(id, { status: nextStatus });
+        showToast(`Status da turma atualizado para ${nextStatus}.`);
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao atualizar turma: ' + err.message);
+    }
+}
+
+// ==========================================
+// INSTÂNCIAS CRUD ACTIONS
+// ==========================================
+window.openInstanciaModal = function() {
+    appState.editInstanciaId = null;
+    appState.mod1Modal = 'MODAL_INSTANCIA';
+    render();
+}
+
+window.editInstancia = function(id) {
+    appState.editInstanciaId = id;
+    appState.mod1Modal = 'MODAL_INSTANCIA';
+    render();
+}
+
+window.toggleStatusInstancia = async function(id, currentStatus) {
+    if (!confirm(`Deseja realmente ${currentStatus === 'INATIVO' ? 'ativar' : 'inativar'} esta Instância?`)) return;
+    try {
+        const newStatus = currentStatus === 'INATIVO' ? 'ATIVO' : 'INATIVO';
+        await DB.instancias.update(id, { status: newStatus });
+        showToast(`Instância ${newStatus.toLowerCase()} com sucesso!`);
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao atualizar: ' + e.message);
+    }
+}
+
+window.submitInstancia = async function(e) {
+    e.preventDefault();
+    const nome = document.getElementById('instNome').value.trim();
+    const responsavelId = document.getElementById('instResp').value;
+
+    const payload = {
+        nome: nome,
+        responsavel_id: responsavelId ? parseInt(responsavelId) : null
+    };
+
+    try {
+        if (appState.editInstanciaId) {
+            await DB.instancias.update(appState.editInstanciaId, payload);
+            showToast('Instância atualizada com sucesso!');
+        } else {
+            payload.status = 'ATIVO';
+            await DB.instancias.create(payload);
+            showToast('Instância criada com sucesso!');
+        }
+        closeMod1Modal();
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+// ==========================================
+// DISCIPLINAS CRUD ACTIONS
+// ==========================================
+window.openDisciplinaModal = function() {
+    appState.editDisciplinaId = null;
+    appState.mod2Modal = 'MODAL_DISCIPLINA';
+    render();
+}
+
+window.editDisciplina = function(id) {
+    appState.editDisciplinaId = id;
+    appState.mod2Modal = 'MODAL_DISCIPLINA';
+    render();
+}
+
+window.toggleStatusDisciplina = async function(id, currentStatus) {
+    if (!confirm(`Deseja realmente ${currentStatus === 'INATIVO' ? 'ativar' : 'inativar'} esta Disciplina?`)) return;
+    try {
+        const newStatus = currentStatus === 'INATIVO' ? 'ATIVO' : 'INATIVO';
+        await DB.disciplinas.update(id, { status: newStatus });
+        showToast(`Disciplina ${newStatus.toLowerCase()} com sucesso!`);
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao atualizar: ' + e.message);
+    }
+}
+
+window.submitDisciplina = async function(e) {
+    e.preventDefault();
+    const nome = document.getElementById('discNome').value.trim();
+    const nucleo = document.getElementById('discNucleo').value;
+    const codigo = document.getElementById('discCodigo').value.trim();
+
+    const checkboxes = document.querySelectorAll('input[name="discCursos"]:checked');
+    const cursoIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    const payload = {
+        nome: nome,
+        nucleo: nucleo,
+        codigo: codigo || null
+    };
+
+    try {
+        let discId = appState.editDisciplinaId;
+        if (discId) {
+            await DB.disciplinas.update(discId, payload);
+            showToast('Disciplina atualizada com sucesso!');
+        } else {
+            payload.status = 'ATIVO';
+            const created = await DB.disciplinas.create(payload);
+            discId = created[0].id; // Supabase returns array of inserted records usually, but `insertRow` does .select()
+            showToast('Disciplina criada com sucesso!');
+        }
+        
+        // Link to courses
+        await DB.disciplinas.setCursos(discId, cursoIds);
+        
+        closeMod2Modal();
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+// ==========================================
+// SERVIDORES CRUD ACTIONS
+// ==========================================
+window.openServidorModal = function() {
+    appState.editServidorId = null;
+    appState.mod3Modal = 'MODAL_SERVIDOR';
+    render();
+}
+
+window.editServidor = function(id) {
+    appState.editServidorId = id;
+    appState.mod3Modal = 'MODAL_SERVIDOR';
+    render();
+}
+
+window.toggleStatusServidor = async function(id, currentStatus) {
+    if (!confirm(`Deseja realmente ${currentStatus === 'INATIVO' ? 'ativar' : 'inativar'} este Servidor?`)) return;
+    try {
+        const newStatus = currentStatus === 'INATIVO' ? 'ATIVO' : 'INATIVO';
+        await DB.servidores.update(id, { status: newStatus });
+        showToast(`Servidor ${newStatus.toLowerCase()} com sucesso!`);
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao atualizar: ' + e.message);
+    }
+}
+
+window.deleteServidor = async function(id) {
+    if (!confirm('ATENÇÃO: Deseja realmente EXCLUIR este servidor do sistema? Esta ação não pode ser desfeita e pode impactar diários vinculados a ele.')) return;
+    try {
+        await DB.servidores.delete(id);
+        showToast('Servidor excluído com sucesso!');
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao excluir servidor: ' + e.message);
+    }
+}
+
+window.submitServidor = async function(e) {
+    e.preventDefault();
+    const nome = document.getElementById('srvNome').value.trim();
+    const siape = document.getElementById('srvSiape').value.trim();
+    const tipo = document.getElementById('tipoServidor').value;
+    const email = document.getElementById('srvEmail').value.trim();
+    const telefone = document.getElementById('srvTelefone').value.trim();
+
+    let vinculo = tipo === 'Docente' ? 'Colegiado' : 'Instância';
+    let vinculoId = null;
+
+    if (tipo === 'Docente') {
+        vinculoId = document.getElementById('srvCol').value;
+    } else {
+        vinculoId = document.getElementById('srvInst').value;
+    }
+
+    if (!vinculoId) {
+        alert(`Por favor, selecione a ${tipo === 'Docente' ? 'Colegiado' : 'Instância'} de vínculo.`);
+        return;
+    }
+
+    const payload = {
+        nome: nome,
+        siape: siape,
+        tipo: tipo,
+        email: email,
+        telefone: telefone,
+        vinculo: vinculo,
+        vinculo_id: parseInt(vinculoId)
+    };
+
+    // Pega as disciplinas
+    const discCheckboxes = document.querySelectorAll('input[name="srvDisc"]:checked');
+    const discIds = Array.from(discCheckboxes).map(cb => parseInt(cb.value));
+
+    try {
+        let servId = appState.editServidorId;
+        if (servId) {
+            await DB.servidores.update(servId, payload);
+            showToast('Servidor atualizado com sucesso!');
+        } else {
+            payload.status = 'ATIVO';
+            const created = await DB.servidores.create(payload);
+            servId = created[0].id;
+            showToast('Servidor criado com sucesso!');
+        }
+        
+        // Link to disciplinas
+        await DB.servidores.setDisciplinas(servId, discIds);
+        
+        appState.mod3Modal = null;
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao salvar: ' + err.message);
+    }
+}
+
+window.onChangeTipoServidor = function() {
+    const tipo = document.getElementById('tipoServidor')?.value;
+    const contCol = document.getElementById('containerColServidor');
+    const contInst = document.getElementById('containerInstServidor');
+    const contDisc = document.getElementById('containerDisciplinas');
+    const txtChefia = document.getElementById('textoChefiaServidor');
+    
+    if (!contCol || !contInst || !contDisc || !txtChefia) return;
+
+    const isDocente = tipo === 'Docente';
+    contCol.style.display = isDocente ? 'block' : 'none';
+    contInst.style.display = isDocente ? 'none' : 'block';
+    contDisc.style.display = isDocente ? 'block' : 'none';
+    
+    txtChefia.value = isDocente 
+        ? "Coordenador do Colegiado selecionado" 
+        : "Responsável pela Instância selecionada";
 }
 
 // Logic to conditionally render fields based on Modalidade
@@ -2659,18 +3081,27 @@ function renderColegiadosTab() {
                 amberDot = ''; // Has coordinator, no amber dot
             }
         }
+
+        const isInactive = c.status === 'INATIVO';
+        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
         
         return `
-            <tr>
+            <tr style="${opacityStyle}">
                 <td style="font-weight: 500;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        ${c.nome} ${amberDot}
+                        ${c.nome} ${amberDot} ${statusBadge}
                     </div>
                 </td>
                 <td><span class="badge-blue" style="background: #E0E7FF; color: #4338CA; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">${c.sigla}</span></td>
                 <td>${coordHtml}</td>
                 <td>
-                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Editar</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editColegiado(${c.id})">Editar</button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusColegiado(${c.id}, '${c.status}')">
+                            ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -2679,7 +3110,7 @@ function renderColegiadosTab() {
     return `
         <div class="table-responsive" style="margin-top: 1.5rem;">
             <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                <button class="nav-btn" onclick="alert('Funcionalidade de Gestão de Colegiados em construção. Esta tela exibe dados de demonstração (mockups).')">+ Novo Colegiado</button>
+                <button class="nav-btn" onclick="window.openColegiadoModal()">+ Novo Colegiado</button>
             </div>
             <table class="perms-table">
                 <thead>
@@ -2691,7 +3122,7 @@ function renderColegiadosTab() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows}
+                    ${rows || '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum colegiado cadastrado.</td></tr>'}
                 </tbody>
             </table>
         </div>
@@ -2707,15 +3138,27 @@ function renderCursosTab() {
             respTxt = prof ? prof.nome : '-';
         }
 
+        const isInactive = c.status === 'INATIVO';
+        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
+
+        // Count turmas for this course
+        const turmasCount = mockTurmas.filter(t => t.curso_id === c.id).length;
+
         return `
-            <tr>
-                <td style="font-weight: 500;">${c.nome}</td>
+            <tr style="${opacityStyle}">
+                <td style="font-weight: 500;">${c.nome} <span style="color:var(--text-muted); font-size:0.8rem;">(${c.sigla || 'S/S'})</span> ${statusBadge}</td>
                 <td><span style="color: var(--text-muted); font-size: 0.85rem;">${c.modalidade}</span></td>
                 <td><span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600;">${c.turno}</span></td>
+                <td><span style="color:var(--text-main); font-size: 0.8rem; font-weight: 500;">${turmasCount} turmas</span></td>
                 <td>${vinculoTxt}</td>
-                <td>${respTxt}</td>
                 <td>
-                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Editar</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editCurso(${c.id})">Editar / Turmas</button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusCurso(${c.id}, '${c.status}')">
+                            ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -2724,21 +3167,21 @@ function renderCursosTab() {
     return `
         <div class="table-responsive" style="margin-top: 1.5rem;">
             <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                <button class="nav-btn" onclick="alert('Funcionalidade de Gestão de Cursos em construção. Esta tela exibe dados de demonstração (mockups).')">+ Novo Curso</button>
+                <button class="nav-btn" onclick="window.openCursoModal()">+ Novo Curso</button>
             </div>
             <table class="perms-table">
                 <thead>
                     <tr>
-                        <th style="text-align: left;">Nome do Curso</th>
+                        <th style="text-align: left;">Nome e Sigla</th>
                         <th style="text-align: left;">Modalidade</th>
                         <th style="text-align: left;">Turno</th>
-                        <th style="text-align: left;">Vínculo Institucional</th>
-                        <th style="text-align: left;">Responsável</th>
+                        <th style="text-align: left;">Turmas</th>
+                        <th style="text-align: left;">Vínculo</th>
                         <th style="text-align: left;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows}
+                    ${rows || '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum curso cadastrado.</td></tr>'}
                 </tbody>
             </table>
         </div>
@@ -2748,88 +3191,166 @@ function renderCursosTab() {
 function renderMod1Modals() {
     if (!appState.mod1Modal) return '';
 
-    if (appState.mod1Modal === 'NOVO_COLEGIADO') {
-        const profOptions = mockProfessores.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+    if (appState.mod1Modal === 'MODAL_COLEGIADO') {
+        const isEdit = !!appState.editColegiadoId;
+        const colData = isEdit ? mockColegiados.find(c => c.id === appState.editColegiadoId) || {} : {};
+        
+        const profOptions = mockProfessores.map(p => `<option value="${p.id}" ${colData.coordenadorId === p.id ? 'selected' : ''}>${p.nome}</option>`).join('');
+        
+        const mods = colData.modalidades || [];
+        const isModChecked = (val) => mods.includes(val) ? 'checked' : '';
+
         return `
             <div class="modal-overlay animate-fade-in" onclick="closeMod1Modal()">
-                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 500px;">
+                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 550px;">
                     <div class="modal-header">
-                        <h3>Criar Novo Colegiado</h3>
+                        <h3>${isEdit ? '✏️ Editar Colegiado' : '➕ Criar Novo Colegiado'}</h3>
                         <button class="close-btn" onclick="closeMod1Modal()">✕</button>
                     </div>
                     <div class="modal-body">
-                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <form onsubmit="window.submitColegiado(event)" style="display: flex; flex-direction: column; gap: 1rem;">
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Nome do Colegiado *</label>
-                                <input type="text" placeholder="Ex: Colegiado de Agropecuária" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="colNome" value="${colData.nome || ''}" required placeholder="Ex: Colegiado de Agropecuária" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Sigla *</label>
-                                <input type="text" placeholder="Ex: C-AGRO" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="colSigla" value="${colData.sigla || ''}" required placeholder="Ex: C-AGRO" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Coordenador (Opcional)</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="">-- Selecionar Docente --</option>
+                                <select id="colCoord" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                    <option value="">-- Deixar Pendente / Selecionar Docente --</option>
                                     ${profOptions}
                                 </select>
                             </div>
-                            <button class="nav-btn" style="width: 100%; margin-top: 1rem;" onclick="closeMod1Modal()">Salvar Colegiado</button>
-                        </div>
+                            
+                            <div style="margin-top: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                <label style="font-weight: 500; font-size: 0.9rem; display: block; margin-bottom: 0.5rem;">Modalidades Atendidas</label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.9rem; color: var(--text-main);">
+                                    <label style="display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" name="colMods" value="Ensino Médio Integrado" ${isModChecked('Ensino Médio Integrado')}> Ensino Médio Integrado</label>
+                                    <label style="display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" name="colMods" value="PROEJA" ${isModChecked('PROEJA')}> PROEJA</label>
+                                    <label style="display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" name="colMods" value="Subsequente" ${isModChecked('Subsequente')}> Subsequente</label>
+                                    <label style="display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" name="colMods" value="Superior" ${isModChecked('Superior')}> Superior (Graduação)</label>
+                                    <label style="display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" name="colMods" value="FIC" ${isModChecked('FIC')}> FIC</label>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem;">Salvar Colegiado</button>
+                        </form>
                     </div>
                 </div>
             </div>
         `;
     }
 
-    if (appState.mod1Modal === 'NOVO_CURSO') {
-        const profOptions = mockProfessores.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
-        const colOptions = mockColegiados.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    if (appState.mod1Modal === 'MODAL_CURSO') {
+        const isEdit = !!appState.editCursoId;
+        const curData = isEdit ? mockCursosCadastrados.find(c => c.id === appState.editCursoId) || {} : {};
         
-        // Timeout to execute onChangeModalidade after DOM updates
+        const profOptions = mockProfessores.map(p => `<option value="${p.id}" ${curData.responsavelId === p.id ? 'selected' : ''}>${p.nome}</option>`).join('');
+        const colOptions = mockColegiados.map(c => `<option value="${c.id}" ${curData.vinculoId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+        
         setTimeout(() => window.onChangeModalidade && window.onChangeModalidade(), 10);
+
+        let turmasSection = '';
+        if (isEdit) {
+            const turmasDoCurso = mockTurmas.filter(t => t.curso_id === curData.id);
+            const parentCol = mockColegiados.find(c => c.id === curData.vinculoId);
+            const availableMods = parentCol && parentCol.modalidades && parentCol.modalidades.length > 0 ? parentCol.modalidades : ['Ensino Médio Integrado', 'PROEJA', 'Subsequente', 'Superior', 'FIC'];
+            const modOptions = availableMods.map(m => `<option value="${m}">${m}</option>`).join('');
+
+            const turmasRows = turmasDoCurso.map(t => `
+                <tr>
+                    <td>${t.nome}</td>
+                    <td>${t.modalidade}</td>
+                    <td><span class="${t.status === 'ATIVA' ? 'badge-blue' : 'badge-orange'}" style="padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${t.status}</span></td>
+                    <td>
+                        <button type="button" class="outline-btn" style="padding: 0.1rem 0.4rem; font-size: 0.7rem;" onclick="window.inativarTurma(${t.id}, '${t.status}')">Alternar Status</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            turmasSection = `
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid var(--border-color);">
+                    <h4>📚 Turmas do Curso</h4>
+                    <table class="perms-table" style="font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 1rem;">
+                        <thead>
+                            <tr><th style="text-align: left;">Nome</th><th style="text-align: left;">Modalidade</th><th style="text-align: left;">Status</th><th style="text-align: left;">Ações</th></tr>
+                        </thead>
+                        <tbody>
+                            ${turmasRows || '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhuma turma cadastrada.</td></tr>'}
+                        </tbody>
+                    </table>
+                    
+                    <div style="background: #F8FAFC; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <h5 style="margin-top:0; margin-bottom: 0.5rem;">Adicionar Turma</h5>
+                        <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                            <div style="flex: 2;">
+                                <label style="font-size: 0.8rem; font-weight: 500;">Nome da Turma</label>
+                                <input type="text" id="novaTurmaNome" placeholder="Ex: 1º Ano A" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                            </div>
+                            <div style="flex: 2;">
+                                <label style="font-size: 0.8rem; font-weight: 500;">Modalidade</label>
+                                <select id="novaTurmaMod" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
+                                    ${modOptions}
+                                </select>
+                            </div>
+                            <div style="flex: 1;">
+                                <button type="button" class="nav-btn" style="width: 100%; padding: 0.55rem;" onclick="window.submitNovaTurma(${curData.id})">Adicionar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
         return `
             <div class="modal-overlay animate-fade-in" onclick="closeMod1Modal()">
-                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 600px;">
+                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
                     <div class="modal-header">
-                        <h3>Cadastrar Novo Curso</h3>
+                        <h3>${isEdit ? '✏️ Editar Curso / Turmas' : '➕ Cadastrar Novo Curso'}</h3>
                         <button class="close-btn" onclick="closeMod1Modal()">✕</button>
                     </div>
                     <div class="modal-body">
-                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <form onsubmit="window.submitCurso(event)" style="display: flex; flex-direction: column; gap: 1rem;">
                             
                             <div>
-                                <label style="font-weight: 500; font-size: 0.9rem;">Nível / Modalidade *</label>
+                                <label style="font-weight: 500; font-size: 0.9rem;">Nível / Modalidade do Curso *</label>
                                 <select id="modalidadeCurso" onchange="onChangeModalidade()" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="Técnico Integrado">Técnico Integrado</option>
-                                    <option value="Técnico Subsequente">Técnico Subsequente</option>
-                                    <option value="Técnico PROEJA">Técnico PROEJA</option>
-                                    <option value="Superior (Graduação)">Superior (Graduação)</option>
-                                    <option value="Pós-Graduação Lato Sensu (Especialização)">Pós-Graduação Lato Sensu (Especialização)</option>
-                                    <option value="Pós-Graduação Stricto Sensu (Mestrado/Doutorado)">Pós-Graduação Stricto Sensu (Mestrado/Doutorado)</option>
-                                    <option value="FIC">FIC (Formação Inicial e Continuada)</option>
+                                    <option value="Técnico Integrado" ${curData.modalidade === 'Técnico Integrado' ? 'selected' : ''}>Técnico Integrado</option>
+                                    <option value="Técnico Subsequente" ${curData.modalidade === 'Técnico Subsequente' ? 'selected' : ''}>Técnico Subsequente</option>
+                                    <option value="Técnico PROEJA" ${curData.modalidade === 'Técnico PROEJA' ? 'selected' : ''}>Técnico PROEJA</option>
+                                    <option value="Superior (Graduação)" ${curData.modalidade === 'Superior (Graduação)' ? 'selected' : ''}>Superior (Graduação)</option>
+                                    <option value="Pós-Graduação" ${curData.modalidade === 'Pós-Graduação' ? 'selected' : ''}>Pós-Graduação</option>
+                                    <option value="FIC" ${curData.modalidade === 'FIC' ? 'selected' : ''}>FIC (Formação Inicial e Continuada)</option>
                                 </select>
                             </div>
 
-                            <div>
-                                <label style="font-weight: 500; font-size: 0.9rem;">Nome do Curso *</label>
-                                <input type="text" placeholder="Ex: Técnico em Agropecuária" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                            <div style="display: flex; gap: 1rem;">
+                                <div style="flex: 2;">
+                                    <label style="font-weight: 500; font-size: 0.9rem;">Nome do Curso *</label>
+                                    <input type="text" id="curNome" value="${curData.nome || ''}" required placeholder="Ex: Técnico em Agropecuária" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="font-weight: 500; font-size: 0.9rem;">Sigla *</label>
+                                    <input type="text" id="curSigla" value="${curData.sigla || ''}" required placeholder="Ex: T-AGRO" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                </div>
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Turno de Funcionamento *</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="Manhã">Manhã</option>
-                                    <option value="Tarde">Tarde</option>
-                                    <option value="Noite">Noite</option>
-                                    <option value="Integral">Integral</option>
+                                <select id="curTurno" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                    <option value="Manhã" ${curData.turno === 'Manhã' ? 'selected' : ''}>Manhã</option>
+                                    <option value="Tarde" ${curData.turno === 'Tarde' ? 'selected' : ''}>Tarde</option>
+                                    <option value="Noite" ${curData.turno === 'Noite' ? 'selected' : ''}>Noite</option>
+                                    <option value="Integral" ${curData.turno === 'Integral' ? 'selected' : ''}>Integral</option>
                                 </select>
                             </div>
                             
                             <div id="containerColegiado">
                                 <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Colegiado) *</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                <select id="curCol" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Selecionar Colegiado --</option>
                                     ${colOptions}
                                 </select>
@@ -2842,44 +3363,50 @@ function renderMod1Modals() {
 
                             <div id="containerResponsavel" style="display: none;">
                                 <label id="labelResponsavel" style="font-weight: 500; font-size: 0.9rem;">Responsável</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                <select id="curResp" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Buscar Servidor --</option>
                                     ${profOptions}
                                 </select>
                             </div>
 
-                            <button class="nav-btn" style="width: 100%; margin-top: 1rem;" onclick="closeMod1Modal()">Salvar Curso</button>
-                        </div>
+                            <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem;">Salvar Curso</button>
+                        </form>
+                        
+                        ${turmasSection}
+
                     </div>
                 </div>
             </div>
         `;
     }
 
-    if (appState.mod1Modal === 'NOVA_INSTANCIA') {
-        const profOptions = mockServidores.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+    if (appState.mod1Modal === 'MODAL_INSTANCIA') {
+        const isEdit = !!appState.editInstanciaId;
+        const instData = isEdit ? mockInstancias.find(i => i.id === appState.editInstanciaId) || {} : {};
+        
+        const profOptions = mockServidores.map(p => `<option value="${p.id}" ${instData.responsavelId === p.id ? 'selected' : ''}>${p.nome}</option>`).join('');
         return `
             <div class="modal-overlay animate-fade-in" onclick="closeMod1Modal()">
                 <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 500px;">
                     <div class="modal-header">
-                        <h3>Criar Nova Instância</h3>
+                        <h3>${isEdit ? '✏️ Editar Instância' : '➕ Criar Nova Instância'}</h3>
                         <button class="close-btn" onclick="closeMod1Modal()">✕</button>
                     </div>
                     <div class="modal-body">
-                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <form onsubmit="window.submitInstancia(event)" style="display: flex; flex-direction: column; gap: 1rem;">
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Nome da Instância *</label>
-                                <input type="text" placeholder="Ex: Coordenação de Pesquisa" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="instNome" value="${instData.nome || ''}" required placeholder="Ex: Coordenação de Pesquisa" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Servidor Responsável (Opcional)</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                <select id="instResp" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Buscar Servidor --</option>
                                     ${profOptions}
                                 </select>
                             </div>
-                            <button class="nav-btn" style="width: 100%; margin-top: 1rem;" onclick="closeMod1Modal()">Salvar Instância</button>
-                        </div>
+                            <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem;">Salvar Instância</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -2897,12 +3424,21 @@ function renderInstanciasTab() {
             if (prof) respHtml = `<strong>${prof.nome}</strong>`;
         }
         
+        const isInactive = inst.status === 'INATIVO';
+        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
+
         return `
-            <tr>
-                <td style="font-weight: 500;">${inst.nome}</td>
+            <tr style="${opacityStyle}">
+                <td style="font-weight: 500;">${inst.nome} ${statusBadge}</td>
                 <td>${respHtml}</td>
                 <td>
-                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Editar</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editInstancia(${inst.id})">Editar</button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusInstancia(${inst.id}, '${inst.status}')">
+                            ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -2912,7 +3448,7 @@ function renderInstanciasTab() {
         <div class="table-responsive" style="margin-top: 1.5rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center;">
                 <span style="color: var(--text-muted); font-size: 0.9rem;">Lista de diretorias, coordenações e setores administrativos do campus.</span>
-                <button class="nav-btn" onclick="alert('Funcionalidade de Gestão de Instâncias em construção. Esta tela exibe dados de demonstração (mockups).')">+ Nova Instância</button>
+                <button class="nav-btn" onclick="window.openInstanciaModal()">+ Nova Instância</button>
             </div>
             <table class="perms-table">
                 <thead>
@@ -2923,7 +3459,7 @@ function renderInstanciasTab() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows}
+                    ${rows || '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhuma instância cadastrada.</td></tr>'}
                 </tbody>
             </table>
         </div>
@@ -2983,7 +3519,12 @@ window.onChangeTipoServidor = function() {
         : "Responsável pela Instância selecionada";
 }
 
-function renderModulo3() {
+window.changeMod3Tab = function(tab) {
+    appState.mod3Tab = tab;
+    render();
+}
+
+function renderServidoresTab() {
     const rows = mockServidores.map(s => {
         let vinculoTxt = '';
         if (s.tipo === 'Docente') {
@@ -3003,72 +3544,125 @@ function renderModulo3() {
         const badgeStyle = s.tipo === 'Docente' 
             ? 'background: #E0E7FF; color: #4338CA;' 
             : 'background: #FEF3C7; color: #B45309;';
+            
+        const isInactive = s.status === 'INATIVO';
+        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
 
         return `
-            <tr>
-                <td style="font-weight: 500; display: flex; align-items: center;">${s.nome} ${amberDot}</td>
+            <tr style="${opacityStyle}">
+                <td style="font-weight: 500; display: flex; align-items: center;">${s.nome} ${amberDot} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${s.tipo}</span></td>
                 <td>${s.siape}</td>
                 <td>${s.email}</td>
                 <td>${vinculoTxt}</td>
                 <td>
-                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Editar</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editServidor(${s.id})">Editar</button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusServidor(${s.id}, '${s.status}')">
+                            ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: #FEF2F2; border-color: #F87171; color: #B91C1C;" onclick="window.deleteServidor(${s.id})">Excluir</button>
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
 
+    return `
+        <div class="table-responsive">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                <button class="nav-btn" onclick="window.openServidorModal()">+ Novo Servidor</button>
+            </div>
+            <table class="perms-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Nome</th>
+                        <th style="text-align: left;">Tipo</th>
+                        <th style="text-align: left;">SIAPE</th>
+                        <th style="text-align: left;">E-mail</th>
+                        <th style="text-align: left;">Vínculo</th>
+                        <th style="text-align: left;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows || '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum servidor cadastrado.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderModulo3() {
+    appState.mod3Tab = appState.mod3Tab || 'SERVIDORES';
+    const isServidores = appState.mod3Tab === 'SERVIDORES';
+
+    let contentHtml = '';
+    if (isServidores) {
+        contentHtml = renderServidoresTab();
+    } else {
+        contentHtml = renderModAprovacoes();
+    }
+
     let modalHtml = '';
-    if (appState.mod3Modal === 'NOVO_SERVIDOR') {
-        const colOptions = mockColegiados.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
-        const instOptions = mockInstancias.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+    if (appState.mod3Modal === 'MODAL_SERVIDOR') {
+        const isEdit = !!appState.editServidorId;
+        const srvData = isEdit ? mockServidores.find(s => s.id === appState.editServidorId) || {} : {};
+
+        const colOptions = mockColegiados.map(c => `<option value="${c.id}" ${srvData.vinculo === 'Colegiado' && srvData.vinculoId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+        const instOptions = mockInstancias.map(i => `<option value="${i.id}" ${srvData.vinculo === 'Instância' && srvData.vinculoId === i.id ? 'selected' : ''}>${c.nome}</option>`).join('');
         
-        // Render options for the "Disciplinas Ministradas" select block
-        const discOptions = mockDisciplinas.map(d => `<option value="${d.id}">${d.nome} (${d.nucleo})</option>`).join('');
+        const selDisc = srvData.disciplinas || [];
+        const discOptions = mockDisciplinas.map(d => `
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
+                <input type="checkbox" name="srvDisc" value="${d.id}" ${selDisc.includes(d.id) ? 'checked' : ''}>
+                <span style="font-size: 0.85rem;">${d.nome} <span style="color: var(--text-muted); font-size: 0.75rem;">(${d.nucleo})</span></span>
+            </label>
+        `).join('');
         
         setTimeout(() => window.onChangeTipoServidor && window.onChangeTipoServidor(), 10);
         
         modalHtml = `
             <div class="modal-overlay animate-fade-in" onclick="closeMod3Modal()">
-                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 600px;">
+                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
                     <div class="modal-header">
-                        <h3>Cadastrar Servidor</h3>
+                        <h3>${isEdit ? '✏️ Editar Servidor' : '➕ Cadastrar Servidor'}</h3>
                         <button class="close-btn" onclick="closeMod3Modal()">✕</button>
                     </div>
                     <div class="modal-body">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <form onsubmit="window.submitServidor(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             
                             <div style="grid-column: span 2;">
                                 <label style="font-weight: 500; font-size: 0.9rem;">Nome Completo *</label>
-                                <input type="text" placeholder="Ex: João da Silva" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="srvNome" value="${srvData.nome || ''}" required placeholder="Ex: João da Silva" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Matrícula SIAPE *</label>
-                                <input type="text" placeholder="Ex: 1234567" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="srvSiape" value="${srvData.siape || ''}" required placeholder="Ex: 1234567" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Tipo de Servidor *</label>
                                 <select id="tipoServidor" onchange="onChangeTipoServidor()" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="Docente">Docente</option>
-                                    <option value="Técnico Administrativo">Técnico Administrativo</option>
+                                    <option value="Docente" ${srvData.tipo === 'Docente' ? 'selected' : ''}>Docente</option>
+                                    <option value="Técnico Administrativo" ${srvData.tipo === 'Técnico Administrativo' ? 'selected' : ''}>Técnico Administrativo</option>
                                 </select>
                             </div>
 
                             <div>
-                                <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional</label>
-                                <input type="email" placeholder="@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional *</label>
+                                <input type="email" id="srvEmail" value="${srvData.email || ''}" required placeholder="@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Contato (WhatsApp)</label>
-                                <input type="text" placeholder="(XX) 9XXXX-XXXX" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="srvTelefone" value="${srvData.telefone || ''}" placeholder="(XX) 9XXXX-XXXX" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
 
                             <div id="containerColServidor" style="grid-column: span 2;">
                                 <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Colegiado) *</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                <select id="srvCol" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Selecionar Colegiado --</option>
                                     ${colOptions}
                                 </select>
@@ -3076,7 +3670,7 @@ function renderModulo3() {
 
                             <div id="containerInstServidor" style="grid-column: span 2; display: none;">
                                 <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Instância Administrativa) *</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                <select id="srvInst" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Selecionar Instância --</option>
                                     ${instOptions}
                                 </select>
@@ -3088,19 +3682,15 @@ function renderModulo3() {
                             </div>
                             
                             <div id="containerDisciplinas" style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
-                                <label style="font-weight: 500; font-size: 0.9rem;">Disciplinas Ministradas</label>
-                                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem;">Adicione as disciplinas que este docente pode ministrar.</p>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <select style="flex: 1; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
-                                        <option value="">-- Buscar Disciplina (Módulo 2) --</option>
-                                        ${discOptions}
-                                    </select>
-                                    <button class="outline-btn">+ Adicionar</button>
+                                <label style="font-weight: 500; font-size: 0.9rem; display: block; margin-bottom: 0.4rem;">Disciplinas Ministradas (Multi-seleção)</label>
+                                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.8rem;">Selecione as disciplinas que este docente está apto a lecionar.</p>
+                                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 150px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm);">
+                                    ${discOptions || '<span style="color: var(--text-muted); font-size: 0.85rem;">Nenhuma disciplina cadastrada.</span>'}
                                 </div>
                             </div>
 
-                            <button class="nav-btn" style="grid-column: span 2; width: 100%; margin-top: 1rem;" onclick="closeMod3Modal()">Salvar Servidor</button>
-                        </div>
+                            <button type="submit" class="nav-btn" style="grid-column: span 2; width: 100%; margin-top: 1rem;">Salvar Servidor</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -3109,31 +3699,15 @@ function renderModulo3() {
 
     return `
         <div class="coord-panel animate-fade" style="margin: 0; min-height: 100%;">
-            <div class="diario-header" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
-                <h2>👨‍💼 Cadastro de Servidor</h2>
-                <p style="color: var(--text-muted);">Gerencie Docentes e Técnicos Administrativos. O sistema calcula automaticamente a chefia baseada no vínculo.</p>
+            <div class="diario-header" style="flex-direction: column; align-items: flex-start; gap: 1.5rem;">
+                <h2>👨‍💼 Gestão de Pessoas</h2>
+                <div style="display: flex; gap: 0.5rem; background: #F1F5F9; padding: 0.3rem; border-radius: 0.5rem; flex-wrap: wrap;">
+                    <button class="coord-tab ${isServidores ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('SERVIDORES')">👨‍💼 Servidores Ativos</button>
+                    <button class="coord-tab ${!isServidores ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('APROVACOES')">✅ Aprovação de Cadastros</button>
+                </div>
             </div>
             <div style="padding: 1.5rem;">
-                <div class="table-responsive">
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                        <button class="nav-btn" onclick="alert('Servidores (Professores e Técnicos) devem usar a opção \'Criar Minha Conta\' na tela inicial de Login. O sistema os enviará para a sua aba de Aprovações.')">+ Novo Servidor</button>
-                    </div>
-                    <table class="perms-table">
-                        <thead>
-                            <tr>
-                                <th style="text-align: left;">Nome</th>
-                                <th style="text-align: left;">Tipo</th>
-                                <th style="text-align: left;">SIAPE</th>
-                                <th style="text-align: left;">E-mail</th>
-                                <th style="text-align: left;">Vínculo</th>
-                                <th style="text-align: left;">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rows}
-                        </tbody>
-                    </table>
-                </div>
+                ${contentHtml}
             </div>
         </div>
         ${modalHtml}
@@ -3413,23 +3987,36 @@ function renderModulo2() {
         
         if (!cursosNomes) cursosNomes = '<span style="color: var(--text-muted); font-style: italic;">Nenhum curso vinculado</span>';
 
+        const isInactive = d.status === 'INATIVO';
+        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
+
         return `
-            <tr>
-                <td style="font-weight: 500;">${d.nome}</td>
+            <tr style="${opacityStyle}">
+                <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
                 <td style="font-size: 0.9rem; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${cursosNomes}">${cursosNomes}</td>
                 <td>
-                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Editar</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editDisciplina(${d.id})">Editar</button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">
+                            ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
 
     let modalHtml = '';
-    if (appState.mod2Modal === 'NOVA_DISCIPLINA') {
+    if (appState.mod2Modal === 'MODAL_DISCIPLINA') {
+        const isEdit = !!appState.editDisciplinaId;
+        const discData = isEdit ? mockDisciplinas.find(d => d.id === appState.editDisciplinaId) || {} : {};
+        const selCursos = discData.cursosIds || [];
+
         const cursosCheckboxes = mockCursosCadastrados.map(c => `
             <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
-                <input type="checkbox" value="${c.id}">
+                <input type="checkbox" name="discCursos" value="${c.id}" ${selCursos.includes(c.id) ? 'checked' : ''}>
                 <span style="font-size: 0.9rem;">${c.nome} <span style="color: var(--text-muted); font-size: 0.75rem;">(${c.modalidade})</span></span>
             </label>
         `).join('');
@@ -3438,35 +4025,40 @@ function renderModulo2() {
             <div class="modal-overlay animate-fade-in" onclick="closeMod2Modal()">
                 <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 500px;">
                     <div class="modal-header">
-                        <h3>Cadastrar Disciplina</h3>
+                        <h3>${isEdit ? '✏️ Editar Disciplina' : '➕ Cadastrar Disciplina'}</h3>
                         <button class="close-btn" onclick="closeMod2Modal()">✕</button>
                     </div>
                     <div class="modal-body">
-                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <form onsubmit="window.submitDisciplina(event)" style="display: flex; flex-direction: column; gap: 1rem;">
                             
                             <div>
+                                <label style="font-weight: 500; font-size: 0.9rem;">Código da Disciplina (Opcional)</label>
+                                <input type="text" id="discCodigo" value="${discData.codigo || ''}" placeholder="Ex: BIO101" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                            </div>
+
+                            <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Nome da Disciplina *</label>
-                                <input type="text" placeholder="Ex: Biologia Celular" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                                <input type="text" id="discNome" value="${discData.nome || ''}" required placeholder="Ex: Biologia Celular" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Núcleo *</label>
-                                <select style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="Núcleo Básico">Núcleo Básico</option>
-                                    <option value="Núcleo Específico">Núcleo Específico</option>
+                                <select id="discNucleo" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                    <option value="Núcleo Básico" ${discData.nucleo === 'Núcleo Básico' ? 'selected' : ''}>Núcleo Básico</option>
+                                    <option value="Núcleo Específico" ${discData.nucleo === 'Núcleo Específico' ? 'selected' : ''}>Núcleo Específico</option>
                                 </select>
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.4rem; display: block;">Vincular a Cursos (Multi-seleção)</label>
                                 <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.8rem;">Selecione todos os cursos que utilizam esta disciplina na matriz curricular.</p>
-                                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; padding-right: 0.5rem;">
-                                    ${cursosCheckboxes}
+                                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm);">
+                                    ${cursosCheckboxes || '<span style="color: var(--text-muted); font-size: 0.85rem;">Nenhum curso cadastrado.</span>'}
                                 </div>
                             </div>
 
-                            <button class="nav-btn" style="width: 100%; margin-top: 1rem;" onclick="closeMod2Modal()">Salvar Disciplina</button>
-                        </div>
+                            <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem;">Salvar Disciplina</button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -3482,7 +4074,7 @@ function renderModulo2() {
             <div style="padding: 1.5rem;">
                 <div class="table-responsive">
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                        <button class="nav-btn" onclick="openMod2Modal('NOVA_DISCIPLINA')">+ Nova Disciplina</button>
+                        <button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>
                     </div>
                     <table class="perms-table">
                         <thead>
@@ -4241,9 +4833,9 @@ function renderModAprovacoes() {
     }).join('');
 
     return `
-        <div class="coord-panel animate-fade" style="padding: 1.5rem;">
-            <div class="diario-header" style="display: flex; align-items: center; justify-content: space-between;">
-                <h2>✅ Aprovação de Cadastros (Servidores e Professores)</h2>
+        <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                <h3 style="margin: 0;">✅ Aprovação de Cadastros (Servidores e Professores)</h3>
                 <button class="nav-btn outline-btn" onclick="cachedUsuariosPendentes = null; loadUsuariosPendentes();" style="display: flex; align-items: center; gap: 0.4rem;">
                     🔄 Atualizar Lista
                 </button>
