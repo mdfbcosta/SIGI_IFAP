@@ -41,3 +41,13 @@ ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ATIVO' CHECK (status IN ('ATIVO', 
 -- Adicionando status para inativar servidores desligados/afastados.
 ALTER TABLE servidores
 ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ATIVO' CHECK (status IN ('ATIVO', 'INATIVO'));
+
+-- 7. RLS PARA TURMAS
+-- Permitir leitura e escrita para usuários autenticados na tabela turmas
+ALTER TABLE turmas ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Leitura autenticada" ON turmas;
+CREATE POLICY "Leitura autenticada" ON turmas FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Escrita autenticada" ON turmas;
+CREATE POLICY "Escrita autenticada" ON turmas FOR ALL TO authenticated USING (true) WITH CHECK (true);
