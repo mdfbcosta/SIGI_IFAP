@@ -393,8 +393,44 @@ function renderLoginScreen() {
     const isLoading = appState.loginLoading || false;
     const errorMsg = appState.loginError || '';
 
+    const registerModalHtml = appState.modalRegister ? `
+        <div class="modal-overlay animate-fade-in" onclick="window.closeRegisterModal()">
+            <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 400px;">
+                <div class="modal-header">
+                    <h3>📝 Criar Nova Conta</h3>
+                    <button class="close-btn" onclick="window.closeRegisterModal()">✕</button>
+                </div>
+                <div class="modal-body">
+                    <form onsubmit="window.submitRegister(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Nome Completo</label>
+                            <input type="text" id="regNome" required style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional</label>
+                            <input type="email" id="regEmail" required placeholder="seu.nome@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Senha</label>
+                            <input type="password" id="regPassword" required minlength="6" placeholder="Mínimo 6 caracteres" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Perfil Solicitado</label>
+                            <select id="regPerfil" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
+                                <option value="SERVIDOR">Professor / Técnico (Servidor)</option>
+                                <option value="COORD_COLEGIADO">Coordenador de Colegiado</option>
+                            </select>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Fiscais e Estagiários são cadastrados diretamente pela COPED.</p>
+                        </div>
+                        <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem; padding: 1rem; font-size: 1rem;">🚀 Enviar Solicitação</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    ` : '';
+
     return `
-        <div class="profiles-container" style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+        <div class="profiles-container" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative;">
             <div style="background: var(--card-bg); padding: 3rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); max-width: 420px; width: 100%; border: 1px solid var(--border-color);">
                 <div style="text-align: center; margin-bottom: 2rem;">
                     <img src="logo.png" alt="IFAP Logo" style="height: 80px; margin-bottom: 1rem;" onerror="this.src='https://via.placeholder.com/80x80?text=IF'">
@@ -424,8 +460,14 @@ function renderLoginScreen() {
                     </button>
                 </form>
 
+                <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.8rem;">Primeiro acesso como Servidor?</p>
+                    <button onclick="window.openRegisterModal()" style="background: none; border: 1px solid var(--if-green); color: var(--if-green); padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s;">Criar Minha Conta</button>
+                </div>
+
                 <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem;">Acesso restrito a servidores autorizados do IFAP</p>
             </div>
+            ${registerModalHtml}
         </div>
     `;
 }
@@ -2024,6 +2066,47 @@ window.logout = async function() {
     navigate('HOME_PROFILES');
 }
 
+window.openRegisterModal = function() {
+    appState.modalRegister = true;
+    render();
+}
+
+window.closeRegisterModal = function() {
+    appState.modalRegister = false;
+    render();
+}
+
+window.submitRegister = async function(e) {
+    e.preventDefault();
+    const nome = document.getElementById('regNome').value.trim();
+    const email = document.getElementById('regEmail').value.trim().toLowerCase();
+    const password = document.getElementById('regPassword').value;
+    const perfil = document.getElementById('regPerfil').value;
+
+    try {
+        // 1. Cria a conta no Auth do Supabase
+        const authData = await Auth.signUp(email, password, nome);
+        
+        // 2. Insere na tabela usuarios com status PENDENTE
+        const authUserId = authData.user ? authData.user.id : null;
+        
+        await DB.usuarios.create({
+            nome: nome,
+            email: email,
+            perfil: perfil,
+            tipo_conta: 'PESSOAL',
+            status_cadastro: 'PENDENTE',
+            auth_id: authUserId
+        });
+
+        alert("Seu cadastro foi submetido com sucesso! Você poderá entrar no sistema assim que a Direção Geral aprovar sua conta.");
+        window.closeRegisterModal();
+    } catch(err) {
+        console.error("Erro no cadastro:", err);
+        alert("Ocorreu um erro ao criar a conta: " + err.message);
+    }
+}
+
 window.handleLogin = async function(event) {
     event.preventDefault();
     const email = document.getElementById('loginEmail').value.trim();
@@ -2596,7 +2679,7 @@ function renderColegiadosTab() {
     return `
         <div class="table-responsive" style="margin-top: 1.5rem;">
             <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                <button class="nav-btn" onclick="openMod1Modal('NOVO_COLEGIADO')">+ Novo Colegiado</button>
+                <button class="nav-btn" onclick="alert('Funcionalidade de Gestão de Colegiados em construção. Esta tela exibe dados de demonstração (mockups).')">+ Novo Colegiado</button>
             </div>
             <table class="perms-table">
                 <thead>
@@ -2641,7 +2724,7 @@ function renderCursosTab() {
     return `
         <div class="table-responsive" style="margin-top: 1.5rem;">
             <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                <button class="nav-btn" onclick="openMod1Modal('NOVO_CURSO')">+ Novo Curso</button>
+                <button class="nav-btn" onclick="alert('Funcionalidade de Gestão de Cursos em construção. Esta tela exibe dados de demonstração (mockups).')">+ Novo Curso</button>
             </div>
             <table class="perms-table">
                 <thead>
@@ -2829,7 +2912,7 @@ function renderInstanciasTab() {
         <div class="table-responsive" style="margin-top: 1.5rem;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center;">
                 <span style="color: var(--text-muted); font-size: 0.9rem;">Lista de diretorias, coordenações e setores administrativos do campus.</span>
-                <button class="nav-btn" onclick="openMod1Modal('NOVA_INSTANCIA')">+ Nova Instância</button>
+                <button class="nav-btn" onclick="alert('Funcionalidade de Gestão de Instâncias em construção. Esta tela exibe dados de demonstração (mockups).')">+ Nova Instância</button>
             </div>
             <table class="perms-table">
                 <thead>
@@ -3033,7 +3116,7 @@ function renderModulo3() {
             <div style="padding: 1.5rem;">
                 <div class="table-responsive">
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                        <button class="nav-btn" onclick="openMod3Modal('NOVO_SERVIDOR')">+ Novo Servidor</button>
+                        <button class="nav-btn" onclick="alert('Servidores (Professores e Técnicos) devem usar a opção \'Criar Minha Conta\' na tela inicial de Login. O sistema os enviará para a sua aba de Aprovações.')">+ Novo Servidor</button>
                     </div>
                     <table class="perms-table">
                         <thead>

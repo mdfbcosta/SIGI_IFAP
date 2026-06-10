@@ -22,6 +22,16 @@ const Auth = {
         return data;
     },
 
+    async signUp(email, password, nome) {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: { data: { nome } }
+        });
+        if (error) throw error;
+        return data;
+    },
+
     async logout() {
         const { error } = await supabaseClient.auth.signOut();
         if (error) throw error;
