@@ -26,23 +26,39 @@ const timeSlots = ["7:30 - 8:20", "8:20 - 9:10", "9:15 - 10:00", "10:20 - 11:10"
 // CARREGAMENTO ASSÍNCRONO DO BANCO DE DADOS
 // ============================================================
 
+function sortDataByStatusAndName(list) {
+    return list.sort((a, b) => {
+        const statusA = a.status || '';
+        const statusB = b.status || '';
+        const isAInactive = statusA.startsWith('INATIV');
+        const isBInactive = statusB.startsWith('INATIV');
+        
+        if (isAInactive && !isBInactive) return 1;
+        if (!isAInactive && isBInactive) return -1;
+        
+        const nameA = (a.nome || '').toLowerCase();
+        const nameB = (b.nome || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+}
+
 async function loadAllDataFromDB() {
     try {
         // Cadastros básicos
-        mockInstancias = (await DB.instancias.fetchAll()).map(i => ({
+        mockInstancias = sortDataByStatusAndName((await DB.instancias.fetchAll()).map(i => ({
             ...i, responsavelId: i.responsavel_id
-        }));
-        mockColegiados = (await DB.colegiados.fetchAll()).map(c => ({
+        })));
+        mockColegiados = sortDataByStatusAndName((await DB.colegiados.fetchAll()).map(c => ({
             ...c, coordenadorId: c.coordenador_id
-        }));
-        mockCursosCadastrados = (await DB.cursos.fetchAll()).map(c => ({
+        })));
+        mockCursosCadastrados = sortDataByStatusAndName((await DB.cursos.fetchAll()).map(c => ({
             ...c, vinculoId: c.vinculo_id, responsavelId: c.responsavel_id
-        }));
-        mockTurmas = await DB.turmas.fetchAll();
-        mockDisciplinas = await DB.disciplinas.fetchAll();
-        mockServidores = (await DB.servidores.fetchAll()).map(s => ({
+        })));
+        mockTurmas = sortDataByStatusAndName(await DB.turmas.fetchAll());
+        mockDisciplinas = sortDataByStatusAndName(await DB.disciplinas.fetchAll());
+        mockServidores = sortDataByStatusAndName((await DB.servidores.fetchAll()).map(s => ({
             ...s, vinculoId: s.vinculo_id
-        }));
+        })));
 
         // Carregar disciplinas de cada servidor (relação N:N)
         for (const serv of mockServidores) {
