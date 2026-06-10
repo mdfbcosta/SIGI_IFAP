@@ -2111,7 +2111,11 @@ window.submitRegister = async function(e) {
         window.closeRegisterModal();
     } catch(err) {
         console.error("Erro no cadastro:", err);
-        alert("Ocorreu um erro ao criar a conta: " + err.message);
+        let errorMsg = err.message;
+        if (errorMsg.includes('For security purposes, you can only request this after')) {
+            errorMsg = "Por motivos de segurança, aguarde alguns segundos antes de tentar criar outra conta.";
+        }
+        alert("Ocorreu um erro ao criar a conta: " + errorMsg);
     }
 }
 
