@@ -4635,7 +4635,6 @@ function renderAdminPanel() {
             </div>
         `;
     }
-    }
 
     let transferAlertHtml = '';
     if (appState.currentProfile === 'COORD_COLEGIADO') {
