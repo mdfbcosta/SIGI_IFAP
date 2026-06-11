@@ -2204,7 +2204,7 @@ window.handlePrimeiroAcesso = async function(e) {
         btn.disabled = true;
         btn.innerText = 'Validando SIAPE...';
         
-        const { data: servidores, error: errSrv } = await supabaseClient.from('servidores').select('id, siape').eq('siape', siape);
+        const { data: servidores, error: errSrv } = await supabaseClient.from('servidores').select('id, siape, email').eq('siape', siape);
         if (errSrv) throw errSrv;
         
         if (!servidores || servidores.length === 0) {
@@ -2239,6 +2239,15 @@ window.handlePrimeiroAcesso = async function(e) {
             const { data: inst } = await supabaseClient.from('instancias').select('responsavel_id').eq('email', email).maybeSingle();
             if (inst && inst.responsavel_id === servidorId) {
                 isAuthorized = true;
+            }
+        }
+        
+        // 4. Verifica se é um e-mail pessoal que confere com o e-mail cadastrado na tabela servidores
+        if (!isAuthorized && servidores[0].email && servidores[0].email.toLowerCase() === email.toLowerCase()) {
+            isAuthorized = true;
+            // Opcional: já que ele é o dono real, se na tabela de usuarios faltava o ID, podemos atualizar
+            if (!usuario.servidor_id) {
+                await supabaseClient.from('usuarios').update({ servidor_id: servidorId }).eq('id', usuario.id);
             }
         }
         

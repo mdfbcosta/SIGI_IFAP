@@ -1301,6 +1301,9 @@ input[type="radio"] {
     padding-bottom: 4rem; /* Extra space to ensure table is fully visible */
     overflow-y: auto;
     position: relative;
+    min-height: 0;
+    min-width: 0;
+    height: 100%;
 }
 
 /* PLACEHOLDER */
