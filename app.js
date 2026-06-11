@@ -4870,17 +4870,14 @@ function renderAdminPanel() {
         <div class="admin-layout ${appState.sidebarCollapsed ? 'collapsed' : ''} ${appState.mobileMenuOpen ? 'mobile-open' : ''}">
             <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
             <button class="mobile-menu-trigger" onclick="toggleMobileMenu()">☰</button>
-            <aside class="admin-sidebar">
-                <div class="sidebar-content-scroll">
+            <aside class="admin-sidebar" style="position: relative; overflow: visible;">
+                <div class="sidebar-content-scroll" style="overflow-y: auto; height: 100%; flex: 1; padding-bottom: 2rem;">
                     <div class="sidebar-header-title" title="MENU DE MÓDULOS">MENU DE MÓDULOS</div>
                     ${sidebarHtml}
                 </div>
-                <div class="sidebar-footer">
-                    <button class="sidebar-btn sidebar-collapse-btn" onclick="toggleSidebar()" title="Recolher Menu">
-                        <span class="sidebar-icon">${appState.sidebarCollapsed ? '▶' : '◀'}</span>
-                        <span class="sidebar-text">Recolher Menu</span>
-                    </button>
-                </div>
+                <button class="sidebar-toggle-handle" onclick="toggleSidebar()" title="Recolher/Expandir Menu">
+                    <span>${appState.sidebarCollapsed ? '▶' : '◀'}</span>
+                </button>
             </aside>
             <div class="admin-content-area" style="display: flex; flex-direction: column;">
                 ${transferAlertHtml}
