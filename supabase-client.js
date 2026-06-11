@@ -220,6 +220,24 @@ const DB = {
         }
     },
 
+    // --- Transferências de Servidor ---
+    transferencias: {
+        fetchAll: () => fetchAll('transferencias_servidor'),
+        create: (row) => insertRow('transferencias_servidor', row),
+        update: (id, data) => updateRow('transferencias_servidor', id, data),
+        delete: (id) => deleteRow('transferencias_servidor', id),
+        async responder(id, status, servidorId, novoVinculoId) {
+            // se ACEITA, muda tbm o vinculo do servidor
+            if (status === 'ACEITA') {
+                const { error: errSrv } = await supabaseClient.from('servidores').update({ vinculo: 'Colegiado', vinculo_id: novoVinculoId }).eq('id', servidorId);
+                if (errSrv) throw errSrv;
+            }
+            const { data, error } = await supabaseClient.from('transferencias_servidor').update({ status, data_resolucao: new Date() }).eq('id', id).select();
+            if (error) throw error;
+            return data[0];
+        }
+    },
+
     // --- Salas ---
     salas: {
         fetchAll: () => fetchAll('salas'),

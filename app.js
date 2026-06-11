@@ -6,6 +6,7 @@ let mockColegiados = [];
 let mockCursosCadastrados = [];
 let mockInstancias = [];
 let mockServidores = [];
+let mockTransferencias = [];
 let mockDisciplinas = [];
 let mockSalasManha = [];
 let mockTurmas = [];
@@ -59,6 +60,8 @@ async function loadAllDataFromDB() {
         mockServidores = sortDataByStatusAndName((await DB.servidores.fetchAll()).map(s => ({
             ...s, vinculoId: s.vinculo_id
         })));
+
+        mockTransferencias = await DB.transferencias.fetchAll();
 
         // Carregar disciplinas de cada servidor (relação N:N)
         for (const serv of mockServidores) {
@@ -340,7 +343,7 @@ window.loadOfflineData = function() {
 const MODULOS_INFO = {
     'MOD_1':         { id: 'MOD_1',         titulo: 'Cad. Colegiados e Cursos',        icone: '🏫' },
     'MOD_2':         { id: 'MOD_2',         titulo: 'Cad. Disciplinas',                icone: '📚' },
-    'MOD_3':         { id: 'MOD_3',         titulo: 'Cad. Servidor',                   icone: '👨‍💼' },
+    'MOD_3':         { id: 'MOD_3',         titulo: 'Cadastrar Servidor',              icone: '👨‍💼' },
     'MOD_4':         { id: 'MOD_4',         titulo: 'Montagem do Horário Semanal',     icone: '📅' },
     'MOD_5':         { id: 'MOD_5',         titulo: 'Ronda Diária de Presença',        icone: '📱' },
     'MOD_6':         { id: 'MOD_6',         titulo: 'Painel do Chefiado',              icone: '👥' },
@@ -372,32 +375,33 @@ function renderHeader() {
     let menu = '';
     if (appState.currentProfile) {
         const perfisNomes = {
-            'FISCAL':           'Fiscal de Sala',
-            'COORD_COLEGIADO':  'Coordenador de Colegiado',
-            'COGEN':            'Coord. Geral de Ensino',
-            'COPED':            'Coordenação Pedagógica',
-            'DEN':              'Departamento de Ensino',
+            'FISCAL':           'Fiscal',
+            'COORD_COLEGIADO':  'Colegiado',
+            'COGEN':            'Coord. Ensino',
+            'COPED':            'COPED',
+            'DEN':              'DEPPI/DEN',
             'DIR_GERAL':        'Diretor Geral',
             'ESTAGIARIO':       'Estagiário',
             'SERVIDOR':         'Servidor',
             'SUPER_ADMIN':      'Suporte Técnico',
         };
         const userName = appState.userName || '';
-        menu = `<div class="sys-title" style="color: var(--text-muted);">${userName ? userName + ' — ' : ''}${perfisNomes[appState.currentProfile] || 'Outro'}</div>`;
+        menu = `<div class="sys-title" style="color: rgba(255, 255, 255, 0.9); font-weight: 500;">${userName ? userName + ' — ' : ''}${perfisNomes[appState.currentProfile] || 'Outro'}</div>`;
     }
 
     return `
-        <header>
-            <div class="logo-container" style="cursor:pointer;" onclick="navigate('ADMIN_PANEL')">
-                <img src="logo.png" alt="IFAP Logo" class="logo" onerror="this.src='https://via.placeholder.com/40x40?text=IF'">
-                <div class="sys-title">SISTEMA DE REGISTRO<br>DE PRESENÇA DOCENTE</div>
+        <header style="background-color: var(--if-green); color: white; display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 10;">
+            <div style="display: flex; align-items: center; gap: 1.5rem;">
+                <img src="logo-instituto-horizontal-branco.png" alt="IFAP Logo" style="height: 40px; cursor: pointer;" onclick="navigate('HOME_PROFILES')">
+                <div style="width: 1px; height: 35px; background: rgba(255,255,255,0.3);"></div>
+                <h2 style="font-size: 1.2rem; font-weight: 400; color: rgba(255,255,255,0.95); margin: 0; letter-spacing: 0.5px;">Registro de Presença Docente</h2>
             </div>
             <div class="nav-menu" style="display: flex; align-items: center; gap: 1rem;">
                 ${menu}
-                <button class="nav-btn outline-btn" onclick="window.toggleHighContrast()" style="border-color: var(--text-main); color: var(--text-main); font-weight: 600; display: flex; align-items: center; gap: 0.3rem;">
-                    🌓 ${appState.highContrast ? 'Normal' : 'Alto Contraste'}
+                <button class="nav-btn outline-btn" onclick="window.toggleHighContrast()" style="border-color: rgba(255,255,255,0.3); color: white; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%;" title="Alternar Alto Contraste">
+                    <span style="font-size: 1.2rem;">🌓</span>
                 </button>
-                <button class="nav-btn outline-btn" onclick="logout()" style="display: flex; align-items: center; gap: 0.3rem;">🚪 Sair</button>
+                <button class="nav-btn outline-btn" onclick="logout()" style="border-color: rgba(255,255,255,0.3); color: white; display: flex; align-items: center; gap: 0.4rem;">🚪 Sair</button>
             </div>
         </header>
     `;
@@ -411,52 +415,14 @@ function renderLoginScreen() {
     const isLoading = appState.loginLoading || false;
     const errorMsg = appState.loginError || '';
 
-    const registerModalHtml = appState.modalRegister ? `
-        <div class="modal-overlay animate-fade-in" onclick="window.closeRegisterModal()">
-            <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 400px;">
-                <div class="modal-header">
-                    <h3>📝 Criar Nova Conta</h3>
-                    <button class="close-btn" onclick="window.closeRegisterModal()">✕</button>
-                </div>
-                <div class="modal-body">
-                    <form onsubmit="window.submitRegister(event)" style="display: flex; flex-direction: column; gap: 1rem;">
-                        <div>
-                            <label style="font-weight: 500; font-size: 0.9rem;">Nome Completo</label>
-                            <input type="text" id="regNome" required style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
-                        </div>
-                        <div>
-                            <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional</label>
-                            <input type="email" id="regEmail" required placeholder="seu.nome@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
-                        </div>
-                        <div>
-                            <label style="font-weight: 500; font-size: 0.9rem;">Senha</label>
-                            <input type="password" id="regPassword" required minlength="6" placeholder="Mínimo 6 caracteres" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
-                        </div>
-                        <div>
-                            <label style="font-weight: 500; font-size: 0.9rem;">Matrícula SIAPE *</label>
-                            <input type="text" id="regSiape" required placeholder="Ex: 1234567" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
-                        </div>
-                        <div>
-                            <label style="font-weight: 500; font-size: 0.9rem;">Perfil Solicitado</label>
-                            <select id="regPerfil" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                <option value="SERVIDOR">Professor / Técnico (Servidor)</option>
-                                <option value="COORD_COLEGIADO">Coordenador de Colegiado</option>
-                            </select>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Fiscais e Estagiários são cadastrados diretamente pela COPED.</p>
-                        </div>
-                        <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem; padding: 1rem; font-size: 1rem;">🚀 Enviar Solicitação</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    ` : '';
+    const registerModalHtml = '';
 
     return `
         <div class="profiles-container" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative;">
             <div style="background: var(--card-bg); padding: 3rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); max-width: 420px; width: 100%; border: 1px solid var(--border-color);">
                 <div style="text-align: center; margin-bottom: 2rem;">
                     <img src="logo.png" alt="IFAP Logo" style="height: 80px; margin-bottom: 1rem;" onerror="this.src='https://via.placeholder.com/80x80?text=IF'">
-                    <h1 style="font-size: 1.4rem; color: var(--if-green); margin: 0;">Sistema de Presença Docente</h1>
+                    <h1 style="font-size: 1.4rem; color: var(--if-green); margin: 0;">Registro de Presença Docente</h1>
                     <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">IFAP — Campus Porto Grande</p>
                 </div>
 
@@ -482,10 +448,7 @@ function renderLoginScreen() {
                     </button>
                 </form>
 
-                <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.8rem;">Primeiro acesso como Servidor?</p>
-                    <button onclick="window.openRegisterModal()" style="background: none; border: 1px solid var(--if-green); color: var(--if-green); padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s;">Criar Minha Conta</button>
-                </div>
+
 
                 <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem;">Acesso restrito a servidores autorizados do IFAP</p>
             </div>
@@ -2961,6 +2924,43 @@ window.editServidor = function(id) {
     render();
 }
 
+window.openExportarModal = function(id) {
+    appState.exportarServidorId = id;
+    appState.mod3Modal = 'MODAL_EXPORTAR';
+    render();
+}
+
+window.submitExportarServidor = async function(e, id) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+
+    try {
+        const destinoId = document.getElementById('expDestinoCol').value;
+        if (!destinoId) throw new Error('Selecione um colegiado de destino.');
+
+        const serv = mockServidores.find(s => s.id == id);
+        if (!serv) throw new Error('Servidor não encontrado.');
+
+        const novaTransf = {
+            servidor_id: serv.id,
+            origem_id: serv.vinculoId,
+            destino_id: parseInt(destinoId),
+            status: 'PENDENTE'
+        };
+
+        await DB.transferencias.create(novaTransf);
+        showToast('Solicitação de transferência enviada!');
+        closeMod3Modal();
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        console.error(err);
+        showToast(err.message || 'Erro ao exportar.');
+        if (btn) btn.disabled = false;
+    }
+}
+
 window.toggleStatusServidor = async function(id, currentStatus) {
     if (!confirm(`Deseja realmente ${currentStatus === 'INATIVO' ? 'ativar' : 'inativar'} este Servidor?`)) return;
     try {
@@ -3545,7 +3545,25 @@ window.changeMod3Tab = function(tab) {
 }
 
 function renderServidoresTab() {
-    const rows = mockServidores.map(s => {
+    let filteredServidores = mockServidores;
+    
+    // Filtro por Perfil
+    if (appState.currentProfile === 'COORD_COLEGIADO') {
+        filteredServidores = mockServidores.filter(s => s.vinculo === 'Colegiado' && s.vinculoId == appState.userVinculoId);
+    } else if (appState.currentProfile === 'COPED') {
+        filteredServidores = mockServidores.filter(s => s.vinculo === 'Instância' && s.vinculoId == appState.userVinculoId);
+    }
+    
+    // Filtro por Busca
+    const termoBusca = (appState.buscaServidor || '').toLowerCase();
+    if (termoBusca) {
+        filteredServidores = filteredServidores.filter(s => 
+            s.nome.toLowerCase().includes(termoBusca) || 
+            (s.siape && s.siape.toLowerCase().includes(termoBusca))
+        );
+    }
+
+    const rows = filteredServidores.map(s => {
         let vinculoTxt = '';
         if (s.tipo === 'Docente') {
             const col = mockColegiados.find(c => c.id === s.vinculoId);
@@ -3560,7 +3578,6 @@ function renderServidoresTab() {
             amberDot = '<div class="amber-dot tooltip" style="margin-left: 0.5rem;"><span class="tooltiptext">Atenção: Este docente ainda não possui disciplinas atribuídas.</span></div>';
         }
 
-        const badgeClass = s.tipo === 'Docente' ? 'badge-blue' : 'badge-orange';
         const badgeStyle = s.tipo === 'Docente' 
             ? 'background: #E0E7FF; color: #4338CA;' 
             : 'background: #FEF3C7; color: #B45309;';
@@ -3568,6 +3585,10 @@ function renderServidoresTab() {
         const isInactive = s.status === 'INATIVO';
         const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
+
+        // Só pode exportar docentes se for coordenador ou direção geral/ensino
+        const canExport = s.tipo === 'Docente' && (appState.currentProfile === 'DIR_GERAL' || appState.currentProfile === 'COGEN' || appState.currentProfile === 'COORD_COLEGIADO');
+        const exportBtn = canExport ? `<button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #2b9938; color: #2b9938;" onclick="window.openExportarModal(${s.id})">Exportar</button>` : '';
 
         return `
             <tr style="${opacityStyle}">
@@ -3579,6 +3600,7 @@ function renderServidoresTab() {
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editServidor(${s.id})">Editar</button>
+                        ${exportBtn}
                         <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusServidor(${s.id}, '${s.status}')">
                             ${isInactive ? 'Ativar' : 'Inativar'}
                         </button>
@@ -3591,7 +3613,8 @@ function renderServidoresTab() {
 
     return `
         <div class="table-responsive">
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
+                <input type="text" placeholder="🔍 Pesquisar por nome ou SIAPE..." value="${appState.buscaServidor || ''}" oninput="appState.buscaServidor = this.value; render();" style="padding: 0.6rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); min-width: 300px; max-width: 100%;">
                 <button class="nav-btn" onclick="window.openServidorModal()">+ Novo Servidor</button>
             </div>
             <table class="perms-table">
@@ -3606,31 +3629,190 @@ function renderServidoresTab() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows || '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum servidor cadastrado.</td></tr>'}
+                    ${rows || '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum servidor encontrado.</td></tr>'}
                 </tbody>
             </table>
         </div>
     `;
 }
 
-function renderModulo3() {
-    appState.mod3Tab = appState.mod3Tab || 'SERVIDORES';
-    const isServidores = appState.mod3Tab === 'SERVIDORES';
+window.changeMod3Tab = function(tab) {
+    appState.mod3Tab = tab;
+    render();
+}
 
-    let contentHtml = '';
-    if (isServidores) {
-        contentHtml = renderServidoresTab();
-    } else {
-        contentHtml = renderModAprovacoes();
+function renderTransferenciasPendentesTab() {
+    const pendentes = mockTransferencias.filter(t => t.destino_id == appState.userVinculoId && t.status === 'PENDENTE');
+    
+    if (pendentes.length === 0) {
+        return `<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Nenhuma transferência pendente no momento.</p>`;
     }
 
+    const rows = pendentes.map(t => {
+        const serv = mockServidores.find(s => s.id === t.servidor_id);
+        const origem = mockColegiados.find(c => c.id === t.origem_id);
+        const dataStr = t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '-';
+        return `
+            <tr>
+                <td style="font-weight: 500;">${serv ? serv.nome : 'Desconhecido'}</td>
+                <td>${serv ? serv.siape : '-'}</td>
+                <td>${origem ? origem.nome : '-'}</td>
+                <td>${dataStr}</td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="nav-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: #10B981;" onclick="window.responderTransferencia(${t.id}, 'ACEITA', ${t.servidor_id}, ${t.destino_id})">✅ Aceitar</button>
+                        <button class="nav-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: #EF4444;" onclick="window.responderTransferencia(${t.id}, 'RECUSADA', ${t.servidor_id}, ${t.destino_id})">❌ Recusar</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="table-responsive">
+            <table class="perms-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Docente</th>
+                        <th style="text-align: left;">SIAPE</th>
+                        <th style="text-align: left;">Colegiado de Origem</th>
+                        <th style="text-align: left;">Data da Solicitação</th>
+                        <th style="text-align: left;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderTransferenciasHistoricoTab() {
+    const historico = mockTransferencias.filter(t => (t.destino_id == appState.userVinculoId || t.origem_id == appState.userVinculoId) && t.status !== 'PENDENTE');
+    
+    if (historico.length === 0) {
+        return `<p style="color: var(--text-muted); text-align: center; padding: 2rem;">Nenhum histórico de transferência encontrado.</p>`;
+    }
+
+    const rows = historico.map(t => {
+        const serv = mockServidores.find(s => s.id === t.servidor_id);
+        const origem = mockColegiados.find(c => c.id === t.origem_id);
+        const destino = mockColegiados.find(c => c.id === t.destino_id);
+        const dataStr = t.data_resolucao ? new Date(t.data_resolucao).toLocaleDateString('pt-BR') : '-';
+        
+        const badgeColor = t.status === 'ACEITA' ? '#10B981' : '#EF4444';
+        
+        return `
+            <tr>
+                <td style="font-weight: 500;">${serv ? serv.nome : 'Desconhecido'}</td>
+                <td>${origem ? origem.nome : '-'}</td>
+                <td>${destino ? destino.nome : '-'}</td>
+                <td><span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">${t.status}</span></td>
+                <td>${dataStr}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="table-responsive">
+            <table class="perms-table">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Docente</th>
+                        <th style="text-align: left;">Origem</th>
+                        <th style="text-align: left;">Destino</th>
+                        <th style="text-align: left;">Status</th>
+                        <th style="text-align: left;">Data Resolução</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+window.responderTransferencia = async function(transfId, status, servidorId, novoVinculoId) {
+    if (!confirm(`Deseja realmente ${status === 'ACEITA' ? 'ACEITAR' : 'RECUSAR'} esta transferência?`)) return;
+    try {
+        await DB.transferencias.responder(transfId, status, servidorId, novoVinculoId);
+        showToast('Transferência respondida com sucesso!');
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        console.error(e);
+        showToast('Erro ao responder transferência.');
+    }
+}
+
+function renderModulo3() {
+    appState.mod3Tab = appState.mod3Tab || 'SERVIDORES';
+    
+    let contentHtml = '';
+    if (appState.mod3Tab === 'SERVIDORES') {
+        contentHtml = renderServidoresTab();
+    } else if (appState.mod3Tab === 'TRANSF_PENDENTES') {
+        contentHtml = renderTransferenciasPendentesTab();
+    } else if (appState.mod3Tab === 'TRANSF_HISTORICO') {
+        contentHtml = renderTransferenciasHistoricoTab();
+    }
+
+
     let modalHtml = '';
-    if (appState.mod3Modal === 'MODAL_SERVIDOR') {
+    if (appState.mod3Modal === 'MODAL_EXPORTAR') {
+        const servData = mockServidores.find(s => s.id === appState.exportarServidorId) || {};
+        const isCol = appState.currentProfile === 'COORD_COLEGIADO';
+        
+        // Renderizar opções de colegiados, exceto o colegiado atual do servidor
+        const colOptionsExp = mockColegiados
+            .filter(c => c.id !== servData.vinculoId)
+            .map(c => `<option value="${c.id}">${c.nome}</option>`)
+            .join('');
+
+        modalHtml = `
+            <div class="modal-overlay animate-fade-in" onclick="closeMod3Modal()">
+                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>📤 Exportar Docente: ${servData.nome}</h3>
+                        <button class="close-btn" onclick="closeMod3Modal()">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                            Ao exportar este docente, uma solicitação será enviada ao coordenador do colegiado de destino. O docente só será transferido após o aceite.
+                        </p>
+                        <form onsubmit="window.submitExportarServidor(event, ${servData.id})">
+                            <label style="font-weight: 500; font-size: 0.9rem;">Colegiado de Destino *</label>
+                            <select id="expDestinoCol" required style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white; margin-bottom: 1rem;">
+                                <option value="">-- Selecionar Destino --</option>
+                                ${colOptionsExp}
+                            </select>
+                            
+                            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                                <button type="button" class="outline-btn" onclick="closeMod3Modal()">Cancelar</button>
+                                <button type="submit" class="nav-btn" style="background: #2b9938;">Confirmar Exportação</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (appState.mod3Modal === 'MODAL_SERVIDOR') {
         const isEdit = !!appState.editServidorId;
         const srvData = isEdit ? mockServidores.find(s => s.id === appState.editServidorId) || {} : {};
 
-        const colOptions = mockColegiados.map(c => `<option value="${c.id}" ${srvData.vinculo === 'Colegiado' && srvData.vinculoId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
-        const instOptions = mockInstancias.map(i => `<option value="${i.id}" ${srvData.vinculo === 'Instância' && srvData.vinculoId === i.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+        const isDir = appState.currentProfile === 'DIR_GERAL' || appState.currentProfile === 'COGEN';
+        const isCol = appState.currentProfile === 'COORD_COLEGIADO';
+        const isCoped = appState.currentProfile === 'COPED';
+
+        let defaultVinculoType = srvData.vinculo || 'Colegiado';
+        if (isCol) defaultVinculoType = 'Colegiado';
+        if (isCoped) defaultVinculoType = 'Instância';
+
+        let vinculoIdToUse = srvData.vinculoId;
+        if (!isEdit && (isCol || isCoped)) {
+            vinculoIdToUse = appState.userVinculoId;
+        }
+
+        const colOptions = mockColegiados.map(c => `<option value="${c.id}" ${defaultVinculoType === 'Colegiado' && vinculoIdToUse == c.id ? 'selected' : ''} ${isCol && c.id != appState.userVinculoId ? 'disabled' : ''}>${c.nome}</option>`).join('');
+        const instOptions = mockInstancias.map(i => `<option value="${i.id}" ${defaultVinculoType === 'Instância' && vinculoIdToUse == i.id ? 'selected' : ''} ${isCoped && i.id != appState.userVinculoId ? 'disabled' : ''}>${c.nome}</option>`).join('');
         
         const selDisc = srvData.disciplinas || [];
         const discOptions = mockDisciplinas.map(d => `
@@ -3640,7 +3822,17 @@ function renderModulo3() {
             </label>
         `).join('');
         
-        setTimeout(() => window.onChangeTipoServidor && window.onChangeTipoServidor(), 10);
+        setTimeout(() => {
+            if (window.onChangeTipoServidor) window.onChangeTipoServidor();
+            if (isCol) {
+                const sel = document.getElementById('srvCol');
+                if (sel) { sel.value = appState.userVinculoId; sel.disabled = true; }
+            }
+            if (isCoped) {
+                const sel = document.getElementById('srvInst');
+                if (sel) { sel.value = appState.userVinculoId; sel.disabled = true; }
+            }
+        }, 10);
         
         modalHtml = `
             <div class="modal-overlay animate-fade-in" onclick="closeMod3Modal()">
@@ -3680,7 +3872,11 @@ function renderModulo3() {
                                 <input type="text" id="srvTelefone" value="${srvData.telefone || ''}" placeholder="(XX) 9XXXX-XXXX" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
 
-                            <div id="containerColServidor" style="grid-column: span 2;">
+                            <div style="grid-column: span 2; display: none;">
+                                <input type="hidden" id="srvVinculo" value="${defaultVinculoType}">
+                            </div>
+
+                            <div id="containerColServidor" style="grid-column: span 2; ${defaultVinculoType === 'Colegiado' ? '' : 'display:none;'}">
                                 <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Colegiado) *</label>
                                 <select id="srvCol" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Selecionar Colegiado --</option>
@@ -3688,7 +3884,7 @@ function renderModulo3() {
                                 </select>
                             </div>
 
-                            <div id="containerInstServidor" style="grid-column: span 2; display: none;">
+                            <div id="containerInstServidor" style="grid-column: span 2; ${defaultVinculoType === 'Instância' ? '' : 'display:none;'}">
                                 <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Instância Administrativa) *</label>
                                 <select id="srvInst" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Selecionar Instância --</option>
@@ -3701,7 +3897,7 @@ function renderModulo3() {
                                 <input type="text" id="textoChefiaServidor" disabled style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: #f3f4f6; color: #6b7280; font-weight: 600;">
                             </div>
                             
-                            <div id="containerDisciplinas" style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+                            <div id="containerDisciplinas" style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem; ${srvData.tipo === 'Docente' ? '' : 'display:none;'}">
                                 <label style="font-weight: 500; font-size: 0.9rem; display: block; margin-bottom: 0.4rem;">Disciplinas Ministradas (Multi-seleção)</label>
                                 <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.8rem;">Selecione as disciplinas que este docente está apto a lecionar.</p>
                                 <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 150px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm);">
@@ -3717,16 +3913,24 @@ function renderModulo3() {
         `;
     }
 
+    let tabsHtml = '';
+    if (appState.currentProfile === 'COORD_COLEGIADO') {
+        const pendentesCount = mockTransferencias.filter(t => t.destino_id == appState.userVinculoId && t.status === 'PENDENTE').length;
+        const pendentesBadge = pendentesCount > 0 ? `<span style="background: #EF4444; color: white; padding: 0.1rem 0.4rem; border-radius: 10px; font-size: 0.75rem; margin-left: 0.4rem;">${pendentesCount}</span>` : '';
+        tabsHtml = `
+            <div style="display: flex; gap: 0.5rem; background: #F1F5F9; padding: 0.3rem; border-radius: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                <button class="coord-tab ${appState.mod3Tab === 'SERVIDORES' ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('SERVIDORES')">👨‍💼 Servidores Ativos</button>
+                <button class="coord-tab ${appState.mod3Tab === 'TRANSF_PENDENTES' ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('TRANSF_PENDENTES')">⏳ Transferências Pendentes ${pendentesBadge}</button>
+                <button class="coord-tab ${appState.mod3Tab === 'TRANSF_HISTORICO' ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('TRANSF_HISTORICO')">📜 Histórico de Transferências</button>
+            </div>
+        `;
+    }
+
     return `
         <div class="coord-panel animate-fade" style="margin: 0; min-height: 100%;">
-            <div class="diario-header" style="flex-direction: column; align-items: flex-start; gap: 1.5rem;">
-                <h2>👨‍💼 Gestão de Pessoas</h2>
-                <div style="display: flex; gap: 0.5rem; background: #F1F5F9; padding: 0.3rem; border-radius: 0.5rem; flex-wrap: wrap;">
-                    <button class="coord-tab ${isServidores ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('SERVIDORES')">👨‍💼 Servidores Ativos</button>
-                    <button class="coord-tab ${!isServidores ? 'active' : ''}" style="border-radius: 0.3rem; border: none; padding: 0.6rem 1.2rem;" onclick="changeMod3Tab('APROVACOES')">✅ Aprovação de Cadastros</button>
-                </div>
-            </div>
             <div style="padding: 1.5rem;">
+                <h2 style="margin-bottom: 1.5rem;">👨‍💼 Gestão de Servidores</h2>
+                ${tabsHtml}
                 ${contentHtml}
             </div>
         </div>
@@ -4431,6 +4635,23 @@ function renderAdminPanel() {
             </div>
         `;
     }
+    }
+
+    let transferAlertHtml = '';
+    if (appState.currentProfile === 'COORD_COLEGIADO') {
+        const pendentes = mockTransferencias.filter(t => t.destino_id == appState.userVinculoId && t.status === 'PENDENTE');
+        if (pendentes.length > 0) {
+            transferAlertHtml = `
+                <div style="background: #FEF3C7; color: #B45309; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                        <span style="font-size: 1.2rem;">⚠️</span>
+                        <span>Você tem <strong>${pendentes.length}</strong> solicitação(ões) de transferência de servidor pendente(s).</span>
+                    </div>
+                    <button class="nav-btn" style="background: #B45309; padding: 0.4rem 1rem; font-size: 0.85rem;" onclick="appState.activeModule = 'MOD_3'; render();">Analisar Agora</button>
+                </div>
+            `;
+        }
+    }
 
     return `
         <div class="admin-layout ${appState.sidebarCollapsed ? 'collapsed' : ''} ${appState.mobileMenuOpen ? 'mobile-open' : ''}">
@@ -4448,7 +4669,8 @@ function renderAdminPanel() {
                     </button>
                 </div>
             </aside>
-            <div class="admin-content-area">
+            <div class="admin-content-area" style="display: flex; flex-direction: column;">
+                ${transferAlertHtml}
                 ${moduleContent}
             </div>
         </div>
