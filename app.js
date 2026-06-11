@@ -2208,11 +2208,34 @@ window.handlePrimeiroAcesso = async function(e) {
         if (errUsu) throw errUsu;
         
         if (!usuario) {
-            throw new Error('Acesso Negado: E-mail não está vinculado a nenhuma área (Coordenação/Instância). O Diretor precisa criar o vínculo primeiro.');
+            throw new Error('Acesso Negado: E-mail não cadastrado no sistema.');
         }
         
-        if (usuario.servidor_id !== servidorId) {
-            throw new Error('Acesso Negado: A sua Matrícula SIAPE não foi designada como responsável por este E-mail Institucional.');
+        let isAuthorized = false;
+        
+        // 1. Verifica se está vinculado diretamente na tabela usuarios
+        if (usuario.servidor_id === servidorId) {
+            isAuthorized = true;
+        }
+        
+        // 2. Verifica se o e-mail pertence a um Colegiado e o servidor é o coordenador
+        if (!isAuthorized) {
+            const { data: col } = await supabaseClient.from('colegiados').select('coordenador_id').eq('email', email).maybeSingle();
+            if (col && col.coordenador_id === servidorId) {
+                isAuthorized = true;
+            }
+        }
+        
+        // 3. Verifica se o e-mail pertence a uma Instância e o servidor é o responsável
+        if (!isAuthorized) {
+            const { data: inst } = await supabaseClient.from('instancias').select('responsavel_id').eq('email', email).maybeSingle();
+            if (inst && inst.responsavel_id === servidorId) {
+                isAuthorized = true;
+            }
+        }
+        
+        if (!isAuthorized) {
+            throw new Error('Acesso Negado: A sua Matrícula SIAPE não está designada como responsável por este E-mail Institucional.');
         }
         
         btn.innerText = 'Enviando Link Mágico...';
