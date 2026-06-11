@@ -1,23 +1,21 @@
 -- ============================================================
--- SCHEMA EXPANSÃO V4: Fluxo de Transferência de Servidores
+-- EXPANSÃO V4: E-MAILS INSTITUCIONAIS PARA COLEGIADOS E INSTÂNCIAS
+-- ============================================================
+-- Este script adiciona o campo 'email' nas tabelas colegiados e instancias,
+-- permitindo vincular a conta institucional ao colegiado para fins de
+-- login e validação do Primeiro Acesso Seguro via SIAPE.
 -- ============================================================
 
--- Tabela para armazenar requisições de transferência entre colegiados
-CREATE TABLE IF NOT EXISTS transferencias_servidor (
-    id BIGSERIAL PRIMARY KEY,
-    servidor_id BIGINT NOT NULL REFERENCES servidores(id) ON DELETE CASCADE,
-    origem_id BIGINT NOT NULL REFERENCES colegiados(id) ON DELETE CASCADE,
-    destino_id BIGINT NOT NULL REFERENCES colegiados(id) ON DELETE CASCADE,
-    status TEXT DEFAULT 'PENDENTE' CHECK (status IN ('PENDENTE', 'ACEITA', 'RECUSADA')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    data_resolucao TIMESTAMPTZ
-);
+-- 1. Adicionar coluna email na tabela colegiados
+ALTER TABLE colegiados 
+ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
 
--- RLS
-ALTER TABLE transferencias_servidor ENABLE ROW LEVEL SECURITY;
+-- 2. Adicionar coluna email na tabela instancias
+ALTER TABLE instancias 
+ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
 
-DROP POLICY IF EXISTS "Leitura autenticada" ON transferencias_servidor;
-CREATE POLICY "Leitura autenticada" ON transferencias_servidor FOR SELECT TO authenticated USING (true);
+-- 3. Permitir leitura anônima na tabela servidores para validação do SIAPE no Primeiro Acesso
+DROP POLICY IF EXISTS "Leitura anon servidores" ON servidores;
+CREATE POLICY "Leitura anon servidores" ON servidores FOR SELECT TO anon USING (true);
 
-DROP POLICY IF EXISTS "Escrita autenticada" ON transferencias_servidor;
-CREATE POLICY "Escrita autenticada" ON transferencias_servidor FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- FIM DA EXPANSÃO V4

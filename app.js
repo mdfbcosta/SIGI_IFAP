@@ -413,6 +413,30 @@ function renderLoginScreen() {
     const errorMsg = appState.loginError || '';
 
     const registerModalHtml = '';
+    const modalPrimeiroAcessoHtml = appState.modalPrimeiroAcesso ? `
+        <div class="modal-overlay animate-fade-in" onclick="window.closePrimeiroAcesso()">
+            <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3>🔐 Primeiro Acesso / Redefinir Senha</h3>
+                    <button class="close-btn" onclick="window.closePrimeiroAcesso()">✕</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.4;">Para acessar uma conta funcional, informe o E-mail Institucional e comprove a sua Matrícula SIAPE. Enviaremos um link de acesso para o e-mail oficial.</p>
+                    <form onsubmit="window.handlePrimeiroAcesso(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional</label>
+                            <input type="email" id="paEmail" required placeholder="Ex: colegiado@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Sua Matrícula SIAPE</label>
+                            <input type="text" id="paSiape" required placeholder="Digite seu SIAPE" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <button type="submit" id="paSubmitBtn" class="nav-btn" style="width: 100%; margin-top: 1rem;">Solicitar Link de Acesso</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    ` : '';
 
     return `
         <div class="profiles-container" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative;">
@@ -445,11 +469,14 @@ function renderLoginScreen() {
                     </button>
                 </form>
 
-
+                <div style="text-align: center; margin-top: 1rem;">
+                    <a href="#" onclick="window.openPrimeiroAcesso(event)" style="color: var(--if-green); font-size: 0.9rem; text-decoration: none; font-weight: 600;">Primeiro Acesso / Cadastrar Senha</a>
+                </div>
 
                 <p style="text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem;">Acesso restrito a servidores autorizados do IFAP</p>
             </div>
             ${registerModalHtml}
+            ${modalPrimeiroAcessoHtml}
         </div>
     `;
 }
@@ -2008,6 +2035,10 @@ function render() {
     else if (appState.screen === 'TEACHER_VALIDATION') content += renderTeacherValidation();
     else if (appState.screen === 'ADMIN_PANEL') content += renderAdminPanel();
     
+    if (appState.mustSetPassword) {
+        content += renderForcePasswordModal();
+    }
+    
     appDiv.innerHTML = content;
 }
 
@@ -2031,6 +2062,65 @@ window.logout = async function() {
     appState.userId = null;
     appState.loginError = '';
     navigate('HOME_PROFILES');
+}
+
+function renderForcePasswordModal() {
+    return `
+        <div class="modal-overlay animate-fade-in" style="background: rgba(0,0,0,0.85); z-index: 99999;">
+            <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h3 style="color: var(--if-green);">🔐 Definição de Senha Definitiva</h3>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 1.5rem; line-height: 1.5;">Você acessou através do Link Mágico. Para garantir a segurança desta conta institucional, é obrigatório definir uma senha definitiva agora.</p>
+                    <form onsubmit="window.submitForcePassword(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Nova Senha</label>
+                            <input type="password" id="fpNewPassword" required minlength="6" placeholder="Mínimo 6 caracteres" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.9rem;">Confirmar Nova Senha</label>
+                            <input type="password" id="fpConfirmPassword" required minlength="6" placeholder="Repita a senha" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                        </div>
+                        <button type="submit" id="fpSubmitBtn" class="nav-btn" style="width: 100%; margin-top: 1rem;">Salvar Senha e Continuar</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.submitForcePassword = async function(e) {
+    e.preventDefault();
+    const p1 = document.getElementById('fpNewPassword').value;
+    const p2 = document.getElementById('fpConfirmPassword').value;
+    const btn = document.getElementById('fpSubmitBtn');
+    
+    if (p1 !== p2) {
+        alert('As senhas não coincidem!');
+        return;
+    }
+    
+    try {
+        btn.disabled = true;
+        btn.innerText = 'Salvando...';
+        
+        const { error } = await supabaseClient.auth.updateUser({ password: p1 });
+        if (error) throw error;
+        
+        alert('Senha definida com sucesso!');
+        appState.mustSetPassword = false;
+        
+        if (window.history.replaceState) {
+            window.history.replaceState(null, null, window.location.pathname);
+        }
+        
+        render();
+    } catch(err) {
+        alert('Erro ao definir senha: ' + err.message);
+        btn.disabled = false;
+        btn.innerText = 'Salvar Senha e Continuar';
+    }
 }
 
 window.openRegisterModal = function() {
@@ -2077,6 +2167,69 @@ window.submitRegister = async function(e) {
             errorMsg = "Por motivos de segurança, aguarde alguns segundos antes de tentar criar outra conta.";
         }
         alert("Ocorreu um erro ao criar a conta: " + errorMsg);
+    }
+}
+
+window.openPrimeiroAcesso = function(e) {
+    if(e) e.preventDefault();
+    appState.modalPrimeiroAcesso = true;
+    render();
+}
+
+window.closePrimeiroAcesso = function() {
+    appState.modalPrimeiroAcesso = false;
+    render();
+}
+
+window.handlePrimeiroAcesso = async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('paEmail').value.trim();
+    const siape = document.getElementById('paSiape').value.trim();
+    const btn = document.getElementById('paSubmitBtn');
+    
+    try {
+        btn.disabled = true;
+        btn.innerText = 'Validando SIAPE...';
+        
+        const { data: servidores, error: errSrv } = await supabaseClient.from('servidores').select('id, siape').eq('siape', siape);
+        if (errSrv) throw errSrv;
+        
+        if (!servidores || servidores.length === 0) {
+            throw new Error('Acesso Negado: SIAPE inválido ou Servidor não encontrado.');
+        }
+        const servidorId = servidores[0].id;
+        
+        const { data: usuario, error: errUsu } = await supabaseClient.from('usuarios').select('*').eq('email', email).maybeSingle();
+        if (errUsu) throw errUsu;
+        
+        if (!usuario) {
+            throw new Error('Acesso Negado: E-mail não está vinculado a nenhuma área (Coordenação/Instância). O Diretor precisa criar o vínculo primeiro.');
+        }
+        
+        if (usuario.servidor_id !== servidorId) {
+            throw new Error('Acesso Negado: A sua Matrícula SIAPE não foi designada como responsável por este E-mail Institucional.');
+        }
+        
+        btn.innerText = 'Enviando Link Mágico...';
+        
+        const { data, error } = await supabaseClient.auth.signInWithOtp({
+            email: email,
+            options: { shouldCreateUser: true }
+        });
+        
+        if (error) throw error;
+        
+        alert('✔️ Acesso Autorizado! Um link mágico foi enviado para o e-mail: ' + email + '\\n\\nPor favor, abra este e-mail oficial para entrar no sistema e definir sua senha definitiva.');
+        window.closePrimeiroAcesso();
+        
+    } catch (err) {
+        console.error(err);
+        alert(err.message || 'Erro ao processar solicitação.');
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.innerText = 'Solicitar Link de Acesso';
+        }
     }
 }
 
@@ -2678,6 +2831,7 @@ window.submitColegiado = async function(e) {
     e.preventDefault();
     const nome = document.getElementById('colNome').value.trim();
     const sigla = document.getElementById('colSigla').value.trim();
+    const email = document.getElementById('colEmail').value.trim();
     const coordenadorId = document.getElementById('colCoord').value;
     
     const checkboxes = document.querySelectorAll('input[name="colMods"]:checked');
@@ -2686,6 +2840,7 @@ window.submitColegiado = async function(e) {
     const payload = {
         nome: nome,
         sigla: sigla,
+        email: email,
         coordenador_id: coordenadorId ? parseInt(coordenadorId) : null,
         modalidades: modalidades
     };
@@ -2698,6 +2853,16 @@ window.submitColegiado = async function(e) {
             payload.status = 'ATIVO';
             await DB.colegiados.create(payload);
             showToast('Colegiado criado com sucesso!');
+        }
+
+        if (email) {
+            const { data: existingUser } = await supabaseClient.from('usuarios').select('id').eq('email', email).maybeSingle();
+            const userPayload = { nome: nome, email: email, perfil: 'COORD_COLEGIADO', servidor_id: coordenadorId ? parseInt(coordenadorId) : null };
+            if (existingUser) {
+                await supabaseClient.from('usuarios').update(userPayload).eq('id', existingUser.id);
+            } else {
+                await supabaseClient.from('usuarios').insert([userPayload]);
+            }
         }
         closeMod1Modal();
         await loadAllDataFromDB();
@@ -2852,9 +3017,11 @@ window.submitInstancia = async function(e) {
     e.preventDefault();
     const nome = document.getElementById('instNome').value.trim();
     const responsavelId = document.getElementById('instResp').value;
+    const email = document.getElementById('instEmail').value.trim();
 
     const payload = {
         nome: nome,
+        email: email,
         responsavel_id: responsavelId ? parseInt(responsavelId) : null
     };
 
@@ -2866,6 +3033,16 @@ window.submitInstancia = async function(e) {
             payload.status = 'ATIVO';
             await DB.instancias.create(payload);
             showToast('Instância criada com sucesso!');
+        }
+
+        if (email) {
+            const { data: existingUser } = await supabaseClient.from('usuarios').select('id').eq('email', email).maybeSingle();
+            const userPayload = { nome: nome, email: email, perfil: 'COPED', servidor_id: responsavelId ? parseInt(responsavelId) : null };
+            if (existingUser) {
+                await supabaseClient.from('usuarios').update(userPayload).eq('id', existingUser.id);
+            } else {
+                await supabaseClient.from('usuarios').insert([userPayload]);
+            }
         }
         closeMod1Modal();
         await loadAllDataFromDB();
@@ -3270,6 +3447,10 @@ function renderMod1Modals() {
                                 <input type="text" id="colSigla" value="${colData.sigla || ''}" required placeholder="Ex: C-AGRO" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             <div>
+                                <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional *</label>
+                                <input type="email" id="colEmail" value="${colData.email || ''}" required placeholder="Ex: colegiado@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                            </div>
+                            <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Coordenador (Opcional)</label>
                                 <select id="colCoord" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
                                     <option value="">-- Deixar Pendente / Selecionar Docente --</option>
@@ -3449,6 +3630,10 @@ function renderMod1Modals() {
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Nome da Instância *</label>
                                 <input type="text" id="instNome" value="${instData.nome || ''}" required placeholder="Ex: Coordenação de Pesquisa" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
+                            </div>
+                            <div>
+                                <label style="font-weight: 500; font-size: 0.9rem;">E-mail Institucional *</label>
+                                <input type="email" id="instEmail" value="${instData.email || ''}" required placeholder="Ex: diretoria@ifap.edu.br" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Servidor Responsável (Opcional)</label>
@@ -5594,6 +5779,19 @@ async function initApp() {
                 appState.userName = userProfile.nome;
                 appState.userEmail = userProfile.email;
                 appState.userId = userProfile.id;
+                
+                if (userProfile.perfil === 'COORD_COLEGIADO') {
+                    const col = mockColegiados.find(c => c.email === userProfile.email || c.coordenadorId === userProfile.servidor_id);
+                    if (col) appState.userVinculoId = col.id;
+                } else if (userProfile.perfil === 'COPED' || userProfile.perfil === 'COGEN' || userProfile.perfil === 'DEN' || userProfile.perfil === 'DIR_GERAL' || userProfile.perfil === 'DIR_ENSINO') {
+                    const inst = mockInstancias.find(i => i.email === userProfile.email || i.responsavelId === userProfile.servidor_id);
+                    if (inst) appState.userVinculoId = inst.id;
+                }
+                
+                if (window.location.hash && window.location.hash.includes('type=magiclink')) {
+                    appState.mustSetPassword = true;
+                }
+
                 window.selectProfile(userProfile.perfil);
                 return;
             }
