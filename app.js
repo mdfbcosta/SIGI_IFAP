@@ -97,6 +97,14 @@ async function loadAllDataFromDB() {
         // Dados derivados para visão do Coordenador
         buildCoordViewData();
 
+        // Permissões
+        try {
+            const { data: cfg } = await supabaseClient.from('sistema_config').select('valor').eq('id', 'permissoes_modulos').maybeSingle();
+            if (cfg && cfg.valor) {
+                appState.permissions = cfg.valor;
+            }
+        } catch(e) { console.log('Erro ao carregar permissões do DB', e); }
+
         console.log('[IFAP] Dados carregados do Supabase com sucesso.');
     } catch (err) {
         console.error('[IFAP] Erro ao carregar dados:', err);
@@ -2538,6 +2546,12 @@ window.togglePermission = function(modId, profileId) {
     const activeUser = appState.currentProfile || 'Sistema';
     const details = `Alterou permissões do módulo "${modTitle}": ${isAdded ? 'concedeu' : 'removeu'} acesso para o perfil "${profileId}".`;
     registrarAcaoAuditoria(activeUser, "Configuração RBAC", details);
+    
+    // Save to DB
+    supabaseClient.from('sistema_config')
+        .upsert({ id: 'permissoes_modulos', valor: appState.permissions })
+        .then(() => console.log('Permissões salvas no BD'))
+        .catch(e => console.error('Erro ao salvar permissões', e));
 
     render();
 }
