@@ -3844,7 +3844,7 @@ function renderModulo3() {
         }
 
         const colOptions = mockColegiados.map(c => `<option value="${c.id}" ${defaultVinculoType === 'Colegiado' && vinculoIdToUse == c.id ? 'selected' : ''} ${isCol && c.id != appState.userVinculoId ? 'disabled' : ''}>${c.nome}</option>`).join('');
-        const instOptions = mockInstancias.map(i => `<option value="${i.id}" ${defaultVinculoType === 'Instância' && vinculoIdToUse == i.id ? 'selected' : ''} ${isCoped && i.id != appState.userVinculoId ? 'disabled' : ''}>${c.nome}</option>`).join('');
+        const instOptions = mockInstancias.map(i => `<option value="${i.id}" ${defaultVinculoType === 'Instância' && vinculoIdToUse == i.id ? 'selected' : ''} ${isCoped && i.id != appState.userVinculoId ? 'disabled' : ''}>${i.nome}</option>`).join('');
         
         const selDisc = srvData.disciplinas || [];
         const discOptions = mockDisciplinas.map(d => `
