@@ -3586,14 +3586,8 @@ function renderServidoresTab() {
         filteredServidores = mockServidores.filter(s => s.vinculo === 'Instância' && s.vinculoId == appState.userVinculoId);
     }
     
-    // Filtro por Busca
+    // Termo de busca para aplicar estilo nas linhas (DOM filtering)
     const termoBusca = (appState.buscaServidor || '').toLowerCase();
-    if (termoBusca) {
-        filteredServidores = filteredServidores.filter(s => 
-            s.nome.toLowerCase().includes(termoBusca) || 
-            (s.siape && s.siape.toLowerCase().includes(termoBusca))
-        );
-    }
 
     const rows = filteredServidores.map(s => {
         let vinculoTxt = '';
@@ -3618,12 +3612,17 @@ function renderServidoresTab() {
         const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
 
-        // Só pode exportar docentes se for coordenador ou direção geral/ensino
+        // SÓ pode exportar docentes se for coordenador ou direção geral/ensino
         const canExport = s.tipo === 'Docente' && (appState.currentProfile === 'DIR_GERAL' || appState.currentProfile === 'COGEN' || appState.currentProfile === 'COORD_COLEGIADO');
         const exportBtn = canExport ? `<button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #2b9938; color: #2b9938;" onclick="window.openExportarModal(${s.id})">Exportar</button>` : '';
 
+        const sNome = s.nome.toLowerCase();
+        const sSiape = (s.siape || '').toLowerCase();
+        const matchesBusca = !termoBusca || sNome.includes(termoBusca) || sSiape.includes(termoBusca);
+        const displayStyle = matchesBusca ? '' : 'display: none;';
+
         return `
-            <tr style="${opacityStyle}">
+            <tr class="servidor-row" style="${opacityStyle} ${displayStyle}" data-nome="${s.nome}" data-siape="${s.siape || ''}">
                 <td style="font-weight: 500; display: flex; align-items: center;">${s.nome} ${amberDot} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${s.tipo}</span></td>
                 <td>${s.siape}</td>
@@ -3646,10 +3645,10 @@ function renderServidoresTab() {
     return `
         <div class="table-responsive">
             <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
-                <input type="text" placeholder="🔍 Pesquisar por nome ou SIAPE..." value="${appState.buscaServidor || ''}" oninput="appState.buscaServidor = this.value; render();" style="padding: 0.6rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); min-width: 300px; max-width: 100%;">
+                <input type="text" placeholder="🔍 Pesquisar por nome ou SIAPE..." value="${appState.buscaServidor || ''}" oninput="appState.buscaServidor = this.value; window.filterServidoresTable(this.value);" style="padding: 0.6rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); min-width: 300px; max-width: 100%;">
                 <button class="nav-btn" onclick="window.openServidorModal()">+ Novo Servidor</button>
             </div>
-            <table class="perms-table">
+            <table id="servidores-table" class="perms-table">
                 <thead>
                     <tr>
                         <th style="text-align: left;">Nome</th>
@@ -5609,3 +5608,18 @@ async function initApp() {
 }
 
 initApp();
+
+window.filterServidoresTable = function(term) {
+    term = term.toLowerCase();
+    const rows = document.querySelectorAll('#servidores-table tbody tr.servidor-row');
+    rows.forEach(row => {
+        const nome = row.getAttribute('data-nome').toLowerCase();
+        const siape = row.getAttribute('data-siape').toLowerCase();
+        if (nome.includes(term) || siape.includes(term)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
