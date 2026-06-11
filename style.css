@@ -36,6 +36,7 @@ body {
     flex-direction: column;
     flex: 1;
     overflow: hidden;
+    min-height: 0;
 }
 
 /* Header & Logo */
@@ -1116,6 +1117,7 @@ input[type="radio"] {
     flex: 1;
     background: #F1F5F9;
     overflow: hidden;
+    min-height: 0;
 }
 
 .admin-sidebar {
