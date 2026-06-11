@@ -4881,7 +4881,7 @@ function renderAdminPanel() {
                     ${sidebarHtml}
                 </div>
                 <button class="sidebar-toggle-handle" onclick="toggleSidebar()" title="Recolher/Expandir Menu">
-                    <span>${appState.sidebarCollapsed ? '▶' : '◀'}</span>
+                    <span style="font-size: 6px;">${appState.sidebarCollapsed ? '▶' : '◀'}</span>
                 </button>
             </aside>
             <div class="admin-content-area" style="display: flex; flex-direction: column;">
