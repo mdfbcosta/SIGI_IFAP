@@ -2926,7 +2926,7 @@ window.submitDisciplina = async function(e) {
         } else {
             payload.status = 'ATIVO';
             const created = await DB.disciplinas.create(payload);
-            discId = created[0].id; // Supabase returns array of inserted records usually, but `insertRow` does .select()
+            discId = created.id; 
             showToast('Disciplina criada com sucesso!');
         }
         
@@ -3062,7 +3062,7 @@ window.submitServidor = async function(e) {
         } else {
             payload.status = 'ATIVO';
             const created = await DB.servidores.create(payload);
-            servId = created[0].id;
+            servId = created.id;
             showToast('Servidor criado com sucesso!');
         }
         
