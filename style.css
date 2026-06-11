@@ -30,6 +30,12 @@ body {
     flex-direction: column;
 }
 
+#app {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
 /* Header & Logo */
 header {
     background-color: var(--card-bg);
@@ -1105,7 +1111,7 @@ input[type="radio"] {
 /* --- ADMIN LAYOUT & SIDEBAR --- */
 .admin-layout {
     display: flex;
-    height: calc(100vh - 70px);
+    flex: 1;
     background: #F1F5F9;
     overflow: hidden;
 }
@@ -1270,6 +1276,7 @@ input[type="radio"] {
 .admin-content-area {
     flex: 1;
     padding: 2rem;
+    padding-bottom: 4rem; /* Extra space to ensure table is fully visible */
     overflow-y: auto;
     position: relative;
 }
