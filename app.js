@@ -298,7 +298,6 @@ let appState = {
         'MOD_8': ['DIR_GERAL', 'DEN', 'COGEN', 'ESTAGIARIO', 'SUPER_ADMIN'],
         'MOD_CONFIG': ['DIR_GERAL', 'ESTAGIARIO', 'SUPER_ADMIN'],
         // Novos módulos
-        'MOD_APROVACOES': ['DIR_GERAL', 'SUPER_ADMIN'],     // Aprovar cadastros de servidores
         'MOD_COPED':      ['COPED', 'SUPER_ADMIN'],          // Painel COPED
         'MOD_SERVIDOR':   ['SERVIDOR', 'SUPER_ADMIN'],       // Painel do Servidor (professor/técnico)
         'MOD_SUPER':      ['SUPER_ADMIN'],                   // Painel de suporte técnico
@@ -351,7 +350,6 @@ const MODULOS_INFO = {
     'MOD_8':         { id: 'MOD_8',         titulo: 'Dashboard Geral',                 icone: '📊' },
     'MOD_CONFIG':    { id: 'MOD_CONFIG',    titulo: 'Configurações e Auditoria',       icone: '⚙️' },
     // Novos módulos
-    'MOD_APROVACOES':{ id: 'MOD_APROVACOES',titulo: 'Aprovação de Cadastros',          icone: '✅' },
     'MOD_COPED':     { id: 'MOD_COPED',     titulo: 'Painel da Coord. Pedagógica',     icone: '🎓' },
     'MOD_SERVIDOR':  { id: 'MOD_SERVIDOR',  titulo: 'Meu Painel',                      icone: '🙋' },
     'MOD_SUPER':     { id: 'MOD_SUPER',     titulo: 'Suporte Técnico (Admin)',          icone: '🛠️' },
@@ -385,14 +383,13 @@ function renderHeader() {
             'SERVIDOR':         'Servidor',
             'SUPER_ADMIN':      'Suporte Técnico',
         };
-        const userName = appState.userName || '';
-        menu = `<div class="sys-title" style="color: rgba(255, 255, 255, 0.9); font-weight: 500;">${userName ? userName + ' — ' : ''}${perfisNomes[appState.currentProfile] || 'Outro'}</div>`;
+        menu = `<div class="sys-title" style="color: rgba(255, 255, 255, 0.9); font-weight: 500;">${perfisNomes[appState.currentProfile] || 'Outro'}</div>`;
     }
 
     return `
         <header style="background-color: var(--if-green); color: white; display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 10;">
             <div style="display: flex; align-items: center; gap: 1.5rem;">
-                <img src="logo-instituto-horizontal-branco.png" alt="IFAP Logo" style="height: 40px; cursor: pointer;" onclick="navigate('HOME_PROFILES')">
+                <img src="./logo-instituto-horizontal-branco.png" alt="IFAP Logo" style="height: 40px; cursor: pointer;" onclick="navigate('HOME_PROFILES')">
                 <div style="width: 1px; height: 35px; background: rgba(255,255,255,0.3);"></div>
                 <h2 style="font-size: 1.2rem; font-weight: 400; color: rgba(255,255,255,0.95); margin: 0; letter-spacing: 0.5px;">Registro de Presença Docente</h2>
             </div>
@@ -4617,8 +4614,6 @@ function renderAdminPanel() {
         }
     } else if (appState.activeModule === 'MOD_8') {
         moduleContent = renderDashboard();
-    } else if (appState.activeModule === 'MOD_APROVACOES') {
-        moduleContent = renderModAprovacoes();
     } else if (appState.activeModule === 'MOD_SERVIDOR') {
         moduleContent = renderModServidor();
     } else if (appState.activeModule === 'MOD_COPED') {
