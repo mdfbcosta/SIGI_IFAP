@@ -389,7 +389,7 @@ function renderHeader() {
     return `
         <header style="background-color: var(--if-green); color: white; display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 10;">
             <div style="display: flex; align-items: center; gap: 1.5rem;">
-                <img src="./logo-instituto-horizontal-branco.png" alt="IFAP Logo" style="height: 40px; cursor: pointer;" onclick="navigate('HOME_PROFILES')">
+                <img src="logo-instituto-horizontal-branco.png" alt="IFAP Logo" style="height: 40px; cursor: pointer;" onerror="this.src='logo.png'" onclick="navigate('HOME_PROFILES')">
                 <div style="width: 1px; height: 35px; background: rgba(255,255,255,0.3);"></div>
                 <h2 style="font-size: 1.2rem; font-weight: 400; color: rgba(255,255,255,0.95); margin: 0; letter-spacing: 0.5px;">Registro de Presença Docente</h2>
             </div>
