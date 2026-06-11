@@ -1999,21 +1999,7 @@ function renderModalSemanal() {
     `;
 }
 
-function renderToast() {
-    if (!appState.toast) return '';
-    const isEmail = appState.toast.msg.includes('email') || appState.toast.msg.includes('E-mail') || appState.toast.msg.includes('@');
-    const title = isEmail ? '📧 E-mail de Alerta Enviado!' : '✨ Notificação do Sistema';
-    const buttonHtml = isEmail 
-        ? `<button onclick="simulateTeacherEmail()">👉 Simular clique do Coordenador no E-mail</button>` 
-        : '';
-    return `
-        <div class="toast">
-            <div style="font-weight: 600;">${title}</div>
-            <div style="font-size: 0.9rem;">${appState.toast.msg}</div>
-            ${buttonHtml}
-        </div>
-    `;
-}
+
 
 // MAIN RENDERER
 function render() {
@@ -2022,7 +2008,6 @@ function render() {
     else if (appState.screen === 'TEACHER_VALIDATION') content += renderTeacherValidation();
     else if (appState.screen === 'ADMIN_PANEL') content += renderAdminPanel();
     
-    content += renderToast();
     appDiv.innerHTML = content;
 }
 
@@ -2485,11 +2470,61 @@ window.corrigirParaPresente = function(pendenciaId) {
 }
 
 window.showToast = function(msg) {
-    appState.toast = { msg: msg };
-    render();
+    const existingToasts = document.querySelectorAll('.sys-toast');
+    for (let t of existingToasts) {
+        if (t.innerText.includes(msg)) return; 
+    }
+
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.position = 'fixed';
+        container.style.bottom = '20px';
+        container.style.right = '20px';
+        container.style.zIndex = '9999';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '10px';
+        document.body.appendChild(container);
+    }
+    
+    const isEmail = msg.includes('email') || msg.includes('E-mail') || msg.includes('@');
+    const title = isEmail ? '📧 E-mail de Alerta Enviado!' : '🔔 Notificação do Sistema';
+    const buttonHtml = isEmail 
+        ? `<button onclick="simulateTeacherEmail()" style="margin-top:0.5rem; padding: 0.4rem; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; cursor:pointer; width: 100%;">👉 Simular clique no E-mail</button>` 
+        : '';
+
+    const toast = document.createElement('div');
+    toast.className = 'sys-toast animate-slide-up';
+    toast.style.background = 'white';
+    toast.style.borderLeft = '4px solid var(--if-green, #2b9938)';
+    toast.style.padding = '1rem 1.5rem';
+    toast.style.borderRadius = 'var(--radius-md, 8px)';
+    toast.style.boxShadow = 'var(--shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1))';
+    toast.style.display = 'flex';
+    toast.style.flexDirection = 'column';
+    toast.style.gap = '0.5rem';
+    toast.style.minWidth = '300px';
+    toast.style.transition = 'all 0.3s ease';
+    
+    toast.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: var(--text-dark, #1e293b);">${title}</strong>
+            <button onclick="this.parentElement.parentElement.remove()" style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; color:var(--text-muted, #94a3b8);">&times;</button>
+        </div>
+        <div style="font-size: 0.9rem; color: var(--text-color, #334155);">${msg}</div>
+        ${buttonHtml}
+    `;
+    
+    container.appendChild(toast);
+    
     setTimeout(() => {
-        appState.toast = null;
-        render();
+        if (toast.parentElement) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px)';
+            setTimeout(() => toast.remove(), 300);
+        }
     }, 5000);
 }
 
@@ -4922,9 +4957,7 @@ window.finalizarRonda = function() {
 
     if (ausenciasCount > 0) {
         const chefiasStr = Array.from(chefiasNotificadas).join(', ');
-        appState.toast = {
-            msg: `Ronda consolidada. ${ausenciasCount} alerta(s) de falta enviado(s) para: ${chefiasStr}.`
-        };
+        showToast(`Ronda consolidada. ${ausenciasCount} alerta(s) de falta enviado(s) para: ${chefiasStr}.`);
     } else {
         showToast("Ronda consolidada com sucesso! Todos os professores presentes.");
     }
@@ -4956,13 +4989,11 @@ window.confirmValidation = function(status) {
 }
 
 window.addEventListener('online', () => {
-    appState.toast = { msg: "Conexão restabelecida. Dados da ronda sincronizados com o servidor." };
-    render();
+    showToast("Conexão restabelecida. Dados da ronda sincronizados com o servidor.");
 });
 
 window.addEventListener('offline', () => {
-    appState.toast = { msg: "Sem conexão de rede. Modo Offline ativado, as alterações serão salvas localmente." };
-    render();
+    showToast("Sem conexão de rede. Modo Offline ativado, as alterações serão salvas localmente.");
 });
 
 // ============================================================
