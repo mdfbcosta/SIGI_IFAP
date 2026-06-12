@@ -2285,7 +2285,7 @@ window.handlePrimeiroAcesso = async function(e) {
 
                 if (insertErr) {
                     console.error('Erro ao auto-criar usuário:', insertErr);
-                    throw new Error('Erro ao criar registro de usuário para Primeiro Acesso.');
+                    throw new Error('Erro ao criar registro de usuário para Primeiro Acesso: ' + (insertErr.message || JSON.stringify(insertErr)));
                 }
                 
                 usuarioRecord = inserted;
@@ -5683,7 +5683,7 @@ function renderModServidor() {
                 </div>
                 <div style="text-align: right;">
                     <div style="font-weight: 600; color: var(--text-main);">${appState.userEmail}</div>
-                    <div style="color: var(--text-muted); font-size: 0.9rem;">SIAPE: ${appState.userId}</div>
+                    <div style="color: var(--text-muted); font-size: 0.9rem;">SIAPE: ${appState.userSiape || ''}</div>
                 </div>
             </div>
 
