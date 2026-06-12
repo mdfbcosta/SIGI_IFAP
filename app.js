@@ -4893,13 +4893,16 @@ function renderAdminPanel() {
 
     let profileCardHtml = '';
     if (appState.currentProfile === 'COORD_COLEGIADO') {
-        let coordName = appState.userName || '';
-        if (!coordName && appState.userVinculoId) {
-            const colegiadoObj = mockColegiados.find(c => c.id === appState.userVinculoId);
+        let coordName = '';
+        if (appState.userVinculoId) {
+            const colegiadoObj = mockColegiados.find(c => c.id == appState.userVinculoId);
             if (colegiadoObj && colegiadoObj.coordenadorId) {
-                const profCoord = mockProfessores.find(p => p.id === colegiadoObj.coordenadorId);
+                const profCoord = mockProfessores.find(p => p.id == colegiadoObj.coordenadorId);
                 if (profCoord) coordName = profCoord.nome;
             }
+        }
+        if (!coordName) {
+            coordName = appState.userName || '';
         }
         if (coordName) {
             const shortName = getFirstAndLastName(coordName);
