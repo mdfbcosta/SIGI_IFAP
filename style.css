@@ -37,6 +37,8 @@ body {
     flex: 1;
     overflow: hidden;
     min-height: 0;
+    height: 100vh;
+    max-height: 100vh;
 }
 
 /* Header & Logo */
@@ -1118,6 +1120,8 @@ input[type="radio"] {
     background: #F1F5F9;
     overflow: hidden;
     min-height: 0;
+    height: calc(100vh - 72px);
+    max-height: calc(100vh - 72px);
 }
 
 .admin-sidebar {
@@ -1396,6 +1400,7 @@ input:checked + .slider:before {
     .admin-layout {
         flex-direction: column;
         height: auto;
+        max-height: none;
         overflow: visible;
     }
     .admin-sidebar {

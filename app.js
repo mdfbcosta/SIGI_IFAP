@@ -4954,7 +4954,7 @@ function renderAdminPanel() {
                     <span style="font-size: 6px;">${appState.sidebarCollapsed ? '▶' : '◀'}</span>
                 </button>
             </aside>
-            <div class="admin-content-area" style="display: flex; flex-direction: column;">
+            <div class="admin-content-area" style="display: flex; flex-direction: column; overflow-y: auto; flex: 1; height: 100%;">
                 ${transferAlertHtml}
                 ${moduleContent}
             </div>
