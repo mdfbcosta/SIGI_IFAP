@@ -2259,7 +2259,10 @@ window.handlePrimeiroAcesso = async function(e) {
         
         const { data, error } = await supabaseClient.auth.signInWithOtp({
             email: email,
-            options: { shouldCreateUser: true }
+            options: { 
+                shouldCreateUser: true,
+                emailRedirectTo: window.location.origin + window.location.pathname
+            }
         });
         
         if (error) throw error;
