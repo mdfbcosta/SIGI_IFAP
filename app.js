@@ -410,7 +410,7 @@ function renderHeader() {
             'DEN':              'DEPPI/DEN',
             'DIR_GERAL':        'Diretor Geral',
             'ESTAGIARIO':       'Estagiário',
-            'SERVIDOR':         'Servidor',
+            'SERVIDOR':         'Painel do Servidor',
             'SUPER_ADMIN':      'Suporte Técnico',
         };
         let perfilLabel = perfisNomes[appState.currentProfile] || 'Outro';
@@ -4919,27 +4919,49 @@ function renderAdminPanel() {
     }).join('');
 
     let profileCardHtml = '';
-    if (appState.currentProfile === 'COORD_COLEGIADO') {
-        let coordName = '';
-        if (appState.userVinculoId) {
+    if (appState.currentProfile === 'COORD_COLEGIADO' || appState.currentProfile === 'SERVIDOR') {
+        let displayName = appState.userName || '';
+        let roleText = appState.currentProfile === 'COORD_COLEGIADO' ? 'coordenador' : 'Docente/Servidor';
+        
+        if (appState.currentProfile === 'COORD_COLEGIADO' && appState.userVinculoId) {
             const colegiadoObj = mockColegiados.find(c => c.id == appState.userVinculoId);
             if (colegiadoObj && colegiadoObj.coordenadorId) {
                 const profCoord = mockProfessores.find(p => p.id == colegiadoObj.coordenadorId);
-                if (profCoord) coordName = profCoord.nome;
+                if (profCoord) displayName = profCoord.nome;
             }
         }
-        if (!coordName) {
-            coordName = appState.userName || '';
+        
+        const myProf = mockProfessores.find(p => p.email === appState.userEmail);
+        if (appState.currentProfile === 'SERVIDOR' && myProf && myProf.tipo) {
+            roleText = myProf.tipo;
         }
-        if (coordName) {
-            const shortName = getFirstAndLastName(coordName);
-            const initials = getInitials(coordName);
+
+        if (displayName) {
+            const shortName = getFirstAndLastName(displayName);
+            const initials = getInitials(displayName);
+            
+            let siapeHtml = '';
+            let editIconHtml = '';
+            
+            if (appState.currentProfile === 'SERVIDOR') {
+                siapeHtml = `<div class="profile-role" style="margin-top: 2px;">SIAPE: ${appState.userSiape || ''}</div>`;
+                editIconHtml = `
+                    <div title="Editar Perfil" onclick="openEditProfileModal()" style="cursor: pointer; font-size: 0.9rem; opacity: 0.6; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+                        ✏️
+                    </div>
+                `;
+            }
+
             profileCardHtml = `
                 <div class="sidebar-profile-card">
-                    <div class="profile-avatar-circle" title="${coordName}">${initials}</div>
+                    <div class="profile-avatar-circle" title="${displayName}">${initials}</div>
                     <div class="profile-info-text">
-                        <div class="profile-name" title="${coordName}">${shortName}</div>
-                        <div class="profile-role">(coordenador)</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                            <div class="profile-name" title="${displayName}">${shortName}</div>
+                            ${editIconHtml}
+                        </div>
+                        <div class="profile-role">(${roleText})</div>
+                        ${siapeHtml}
                     </div>
                 </div>
                 <div class="profile-separator"></div>
@@ -5043,6 +5065,7 @@ function renderAdminPanel() {
         ${renderModalSubstitutos()}
         ${renderModalSemanal()}
         ${renderMod4TimetableModal()}
+        ${renderEditProfileModal()}
     `;
 }
 
@@ -5676,16 +5699,7 @@ function renderModServidor() {
 
     return `
         <main style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; border-bottom: 2px solid var(--border-color); padding-bottom: 1rem;">
-                <div>
-                    <h2 style="font-size: 1.8rem; margin: 0; color: var(--if-green);">Olá, ${appState.userName}</h2>
-                    <p style="color: var(--text-muted); margin-top: 0.3rem;">Painel do Servidor Institucional</p>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-weight: 600; color: var(--text-main);">${appState.userEmail}</div>
-                    <div style="color: var(--text-muted); font-size: 0.9rem;">SIAPE: ${appState.userSiape || ''}</div>
-                </div>
-            </div>
+
 
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
                 
@@ -5935,6 +5949,8 @@ async function initApp() {
                 appState.userName = userProfile.nome;
                 appState.userEmail = userProfile.email;
                 appState.userId = userProfile.id;
+                appState.userSiape = userProfile.siape;
+                appState.userWhatsapp = userProfile.whatsapp;
                 
                 if (userProfile.perfil === 'COORD_COLEGIADO') {
                     const col = mockColegiados.find(c => (userProfile.email && c.email === userProfile.email) || (userProfile.servidor_id && c.coordenadorId === userProfile.servidor_id));
@@ -5975,5 +5991,110 @@ window.filterServidoresTable = function(term) {
             row.style.display = 'none';
         }
     });
+}
+
+function renderEditProfileModal() {
+    if (!appState.modalEditProfile) return '';
+    let currentZap = appState.userWhatsapp || '';
+    
+    return `
+        <div class="modal-overlay" onclick="closeEditProfileModal(event)">
+            <div class="modal-content animate-fade" style="max-width: 500px; padding: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="margin: 0; color: var(--if-green); display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.5rem;">✏️</span>
+                        Editar Perfil
+                    </h2>
+                    <button class="nav-btn" style="background: transparent; color: var(--text-muted); padding: 0.5rem;" onclick="closeEditProfileModal()">✕</button>
+                </div>
+                
+                <div style="background: #F8FAFC; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid #E2E8F0;">
+                    <h3 style="margin-top: 0; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Dados Cadastrais (Leitura)</h3>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 0.8rem; font-size: 0.95rem;">
+                        <div><strong style="color: var(--text-main);">Nome:</strong> ${appState.userName}</div>
+                        <div><strong style="color: var(--text-main);">E-mail:</strong> ${appState.userEmail}</div>
+                        <div><strong style="color: var(--text-main);">SIAPE:</strong> ${appState.userSiape || '-'}</div>
+                        <div><strong style="color: var(--text-main);">Perfil:</strong> ${appState.currentProfile}</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-main);">WhatsApp <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 400;">(Apenas números)</span></label>
+                    <input type="text" id="editProfileZap" class="modal-input" placeholder="Ex: 96991234567" value="${currentZap}">
+                </div>
+
+                <div style="margin-bottom: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-main);">Acesso ao Sistema</label>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Para maior segurança, a redefinição de senha é feita enviando um link de confirmação para o seu e-mail institucional.
+                    </p>
+                    <button id="btnResetSenha" class="outline-btn" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 0.5rem;" onclick="requestPasswordReset()">
+                        ✉️ Redefinir Senha por E-mail
+                    </button>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+                    <button class="nav-btn" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onclick="closeEditProfileModal()">Cancelar</button>
+                    <button id="btnSaveProfile" class="nav-btn" onclick="saveProfileEdits()">Salvar Alterações</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+window.openEditProfileModal = function() {
+    appState.modalEditProfile = true;
+    render();
+}
+
+window.closeEditProfileModal = function(e) {
+    if (e && e.target !== e.currentTarget) return;
+    appState.modalEditProfile = false;
+    render();
+}
+
+window.requestPasswordReset = async function() {
+    const btn = document.getElementById('btnResetSenha');
+    const oldText = btn.innerHTML;
+    btn.innerHTML = 'Enviando...';
+    btn.disabled = true;
+    try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(appState.userEmail, {
+            redirectTo: window.location.origin + window.location.pathname,
+        });
+        if (error) throw error;
+        alert('Um e-mail com o link de redefinição de senha foi enviado para ' + appState.userEmail);
+    } catch (err) {
+        console.error('Erro na redefinição:', err);
+        alert('Erro ao solicitar redefinição: ' + (err.message || 'Falha de comunicação.'));
+    } finally {
+        btn.innerHTML = oldText;
+        btn.disabled = false;
+    }
+}
+
+window.saveProfileEdits = async function() {
+    const newZap = document.getElementById('editProfileZap').value.trim();
+    const btn = document.getElementById('btnSaveProfile');
+    btn.innerHTML = 'Salvando...';
+    btn.disabled = true;
+
+    try {
+        const { error } = await supabaseClient
+            .from('usuarios')
+            .update({ whatsapp: newZap })
+            .eq('id', appState.userId);
+
+        if (error) throw error;
+        
+        appState.userWhatsapp = newZap;
+        alert('Perfil atualizado com sucesso!');
+        closeEditProfileModal();
+    } catch (err) {
+        console.error('Erro ao atualizar perfil:', err);
+        alert('Erro ao atualizar perfil: ' + (err.message || 'Verifique sua conexão com a internet.'));
+        btn.innerHTML = 'Salvar Alterações';
+        btn.disabled = false;
+    }
 }
 
