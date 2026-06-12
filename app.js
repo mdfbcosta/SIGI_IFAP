@@ -212,6 +212,7 @@ let appState = {
     userName: null,
     userEmail: null,
     userId: null,
+    userVinculoId: null,
     loginLoading: false,
     loginError: '',
     selectedShift: null,
@@ -2079,7 +2080,22 @@ window.logout = async function() {
     appState.userName = null;
     appState.userEmail = null;
     appState.userId = null;
+    appState.userVinculoId = null;
     appState.loginError = '';
+    
+    // Resetar estados específicos de coordenação/fiscalização para o padrão
+    appState.selectedShift = null;
+    appState.selectedTimeSlot = 0;
+    appState.coordTab = 'CURSOS';
+    appState.coordNivel0 = null;
+    appState.chefiadosNivel0 = null;
+    appState.coordCursoView = 'LIST';
+    appState.selectedCursoCoord = null;
+    appState.selectedChefiado = 'GERAL';
+    appState.selectedDayDetail = null;
+    appState.highlightedDay = null;
+    appState.chefiadosTab = 'CARDS';
+
     navigate('HOME_PROFILES');
 }
 
@@ -2299,28 +2315,10 @@ window.handleLogin = async function(event) {
     try {
         const authData = await Auth.login(email, password);
         
-        // Buscar perfil do usuário na tabela usuarios
-        const userProfile = await Auth.getUserProfileByEmail(email);
-        
-        if (!userProfile) {
-            appState.loginLoading = false;
-            appState.loginError = 'Usuário não encontrado no sistema. Contate o administrador.';
-            render();
-            return;
-        }
-
-        // Carregar todos os dados do banco
-        await loadAllDataFromDB();
-
-        // Configurar estado do app
-        appState.userName = userProfile.nome;
-        appState.userEmail = userProfile.email;
-        appState.userId = userProfile.id;
-        appState.loginLoading = false;
-        appState.loginError = '';
-
-        // Selecionar perfil automaticamente
-        window.selectProfile(userProfile.perfil);
+        // Após autenticação bem-sucedida, recarregar a página.
+        // Isso garante que initApp() execute do zero com a sessão nova,
+        // eliminando qualquer estado residual da sessão anterior.
+        window.location.reload();
     } catch (err) {
         console.error('Erro no login:', err);
         appState.loginLoading = false;
@@ -5856,10 +5854,10 @@ async function initApp() {
                 appState.userId = userProfile.id;
                 
                 if (userProfile.perfil === 'COORD_COLEGIADO') {
-                    const col = mockColegiados.find(c => c.email === userProfile.email || c.coordenadorId === userProfile.servidor_id);
+                    const col = mockColegiados.find(c => (userProfile.email && c.email === userProfile.email) || (userProfile.servidor_id && c.coordenadorId === userProfile.servidor_id));
                     if (col) appState.userVinculoId = col.id;
                 } else if (userProfile.perfil === 'COPED' || userProfile.perfil === 'COGEN' || userProfile.perfil === 'DEN' || userProfile.perfil === 'DIR_GERAL' || userProfile.perfil === 'DIR_ENSINO') {
-                    const inst = mockInstancias.find(i => i.email === userProfile.email || i.responsavelId === userProfile.servidor_id);
+                    const inst = mockInstancias.find(i => (userProfile.email && i.email === userProfile.email) || (userProfile.servidor_id && i.responsavelId === userProfile.servidor_id));
                     if (inst) appState.userVinculoId = inst.id;
                 }
                 
