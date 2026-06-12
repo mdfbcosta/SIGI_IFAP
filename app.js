@@ -101,7 +101,7 @@ async function loadAllDataFromDB() {
         try {
             const { data: cfg } = await supabaseClient.from('sistema_config').select('valor').eq('id', 'permissoes_modulos').maybeSingle();
             if (cfg && cfg.valor) {
-                appState.permissions = cfg.valor;
+                appState.permissions = { ...appState.permissions, ...cfg.valor };
             }
         } catch(e) { console.log('Erro ao carregar permissões do DB', e); }
 
@@ -2746,7 +2746,18 @@ window.showToast = function(msg) {
 }
 
 function renderPermissionsConfig() {
-    const perfisIds = ['FISCAL', 'COORD_COLEGIADO', 'COORD_GERAL', 'COORD_PEDAG', 'DIR_ENSINO', 'DIR_GERAL', 'ESTAGIARIO'];
+    const perfisIds = ['SERVIDOR', 'FISCAL', 'COORD_COLEGIADO', 'COGEN', 'COPED', 'DEN', 'DIR_GERAL', 'ESTAGIARIO', 'SUPER_ADMIN'];
+    const perfisNomes = {
+        'SERVIDOR':        'Servidor/Docente',
+        'FISCAL':          'Fiscal de Ronda',
+        'COORD_COLEGIADO': 'C. Colegiado',
+        'COGEN':           'Coord. Ensino',
+        'COPED':           'COPED',
+        'DEN':             'DEPPI/DEN',
+        'DIR_GERAL':       'Diretor Geral',
+        'ESTAGIARIO':      'Estagiário',
+        'SUPER_ADMIN':     'Suporte Técnico'
+    };
     
     // Sub-tabs
     const tabsHtml = `
@@ -2768,7 +2779,7 @@ function renderPermissionsConfig() {
                 <thead>
                     <tr>
                         <th style="text-align: left;">Módulos</th>
-                        ${perfisIds.map(p => `<th><div class="vertical-text">${p}</div></th>`).join('')}
+                        ${perfisIds.map(p => `<th><div class="vertical-text">${perfisNomes[p] || p}</div></th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>
@@ -2779,7 +2790,7 @@ function renderPermissionsConfig() {
             tableHtml += `<tr>
                 <td style="font-weight: 500;">${mod.icone} ${mod.titulo}</td>
                 ${perfisIds.map(p => {
-                    const isChecked = appState.permissions[modId].includes(p);
+                    const isChecked = appState.permissions[modId] && appState.permissions[modId].includes(p);
                     return `
                         <td style="text-align: center;">
                             <label class="switch">
