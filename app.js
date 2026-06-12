@@ -392,9 +392,14 @@ function renderHeader() {
             'SERVIDOR':         'Servidor',
             'SUPER_ADMIN':      'Suporte Técnico',
         };
+        let perfilLabel = perfisNomes[appState.currentProfile] || 'Outro';
+        if (appState.currentProfile === 'COORD_COLEGIADO' && appState.userVinculoId) {
+            const colHeader = mockColegiados.find(c => c.id === appState.userVinculoId);
+            if (colHeader) perfilLabel = colHeader.nome;
+        }
         menu = `
             <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-right: 0.5rem;">
-                <div class="sys-title" style="color: rgba(255, 255, 255, 0.9); font-weight: 600; font-size: 0.95rem; line-height: 1.2;">${perfisNomes[appState.currentProfile] || 'Outro'}</div>
+                <div class="sys-title" style="color: rgba(255, 255, 255, 0.9); font-weight: 600; font-size: 0.95rem; line-height: 1.2;">${perfilLabel}</div>
                 <div style="color: rgba(255, 255, 255, 0.75); font-size: 0.75rem; line-height: 1.2; letter-spacing: 0.3px;">${appState.userEmail || ''}</div>
             </div>
         `;
