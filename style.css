@@ -1234,6 +1234,99 @@ input[type="radio"] {
     text-overflow: ellipsis;
 }
 
+/* Sidebar Profile Card Styling */
+.sidebar-profile-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 1.25rem 1.5rem;
+    background: transparent;
+    transition: padding 0.3s ease, justify-content 0.3s ease;
+}
+
+.profile-avatar-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--if-green) 0%, #48BB78 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(50, 160, 65, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.sidebar-profile-card:hover .profile-avatar-circle {
+    transform: scale(1.05);
+}
+
+.profile-info-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+    transition: opacity 0.2s ease;
+}
+
+.profile-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-role {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.profile-separator {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(226, 232, 240, 0.8) 0%, rgba(226, 232, 240, 0.2) 100%);
+    margin: 0 1.5rem 1rem 1.5rem;
+    transition: margin 0.3s ease;
+}
+
+/* Collapsed Sidebar overrides for Profile Card */
+.admin-layout.collapsed .sidebar-profile-card {
+    justify-content: center;
+    padding: 1.25rem 0.5rem;
+}
+
+.admin-layout.collapsed .profile-info-text {
+    display: none;
+}
+
+.admin-layout.collapsed .profile-separator {
+    margin: 0 1rem 1rem 1rem;
+}
+
+/* High Contrast mode accessibility for Profile Card */
+html.high-contrast .profile-avatar-circle {
+    background: #000;
+    border: 2px solid #fff;
+    color: #fff;
+    box-shadow: none;
+}
+html.high-contrast .profile-name {
+    color: #000;
+}
+html.high-contrast .profile-role {
+    color: #1a1a1a;
+}
+html.high-contrast .profile-separator {
+    background: #000;
+}
+
 .mobile-menu-trigger {
     display: none;
     position: fixed;

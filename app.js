@@ -191,7 +191,28 @@ function getAutoTimeSlotIdx(shift) {
     return 0;
 }
 
+function getFirstAndLastName(fullName) {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length <= 1) return fullName;
+    // Evita sobrenomes muito curtos como 'de', 'da', etc.
+    let last = parts[parts.length - 1];
+    if (parts.length > 2 && ['de', 'da', 'do', 'dos', 'das', 'e'].includes(last.toLowerCase())) {
+        last = parts[parts.length - 2];
+    }
+    return `${parts[0]} ${last}`;
+}
+
+function getInitials(fullName) {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/).filter(p => !['de', 'da', 'do', 'dos', 'das', 'e'].includes(p.toLowerCase()));
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 const autoTime = getAutoShiftAndDate();
+
 
 
 function registrarAcaoAuditoria(usuario, acao, detalhes) {
@@ -4870,6 +4891,32 @@ function renderAdminPanel() {
         `;
     }).join('');
 
+    let profileCardHtml = '';
+    if (appState.currentProfile === 'COORD_COLEGIADO') {
+        let coordName = appState.userName || '';
+        if (!coordName && appState.userVinculoId) {
+            const colegiadoObj = mockColegiados.find(c => c.id === appState.userVinculoId);
+            if (colegiadoObj && colegiadoObj.coordenadorId) {
+                const profCoord = mockProfessores.find(p => p.id === colegiadoObj.coordenadorId);
+                if (profCoord) coordName = profCoord.nome;
+            }
+        }
+        if (coordName) {
+            const shortName = getFirstAndLastName(coordName);
+            const initials = getInitials(coordName);
+            profileCardHtml = `
+                <div class="sidebar-profile-card">
+                    <div class="profile-avatar-circle" title="${coordName}">${initials}</div>
+                    <div class="profile-info-text">
+                        <div class="profile-name" title="${coordName}">${shortName}</div>
+                        <div class="profile-role">(coordenador)</div>
+                    </div>
+                </div>
+                <div class="profile-separator"></div>
+            `;
+        }
+    }
+
     let moduleContent = '';
     
     if (appState.activeModule === 'MOD_CONFIG') {
@@ -4950,6 +4997,7 @@ function renderAdminPanel() {
             <button class="mobile-menu-trigger" onclick="toggleMobileMenu()">☰</button>
             <aside class="admin-sidebar" style="position: relative; overflow: visible;">
                 <div class="sidebar-content-scroll" style="overflow-y: auto; height: 100%; flex: 1; padding-bottom: 2rem;">
+                    ${profileCardHtml}
                     <div class="sidebar-header-title" title="MENU DE MÓDULOS">MENU DE MÓDULOS</div>
                     ${sidebarHtml}
                 </div>
