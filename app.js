@@ -2263,14 +2263,41 @@ window.handlePrimeiroAcesso = async function(e) {
         const { data: usuario, error: errUsu } = await supabaseClient.from('usuarios').select('*').eq('email', email).maybeSingle();
         if (errUsu) throw errUsu;
         
-        if (!usuario) {
-            throw new Error('Acesso Negado: E-mail não cadastrado no sistema.');
+        let usuarioRecord = usuario;
+        
+        if (!usuarioRecord) {
+            // Conta de usuário ainda não existe. Verifica se o e-mail informado confere com o cadastro de servidor.
+            if (servidores[0].email && email.toLowerCase() === servidores[0].email.toLowerCase()) {
+                const novoUsuario = {
+                    email: email.toLowerCase(),
+                    nome: servidores[0].nome,
+                    perfil: 'SERVIDOR',
+                    servidor_id: servidorId,
+                    tipo_conta: 'PESSOAL',
+                    ativo: true
+                };
+
+                const { data: inserted, error: insertErr } = await supabaseClient
+                    .from('usuarios')
+                    .insert([novoUsuario])
+                    .select()
+                    .single();
+
+                if (insertErr) {
+                    console.error('Erro ao auto-criar usuário:', insertErr);
+                    throw new Error('Erro ao criar registro de usuário para Primeiro Acesso.');
+                }
+                
+                usuarioRecord = inserted;
+            } else {
+                throw new Error('Acesso Negado: E-mail não cadastrado no sistema e não confere com o e-mail do SIAPE.');
+            }
         }
         
         let isAuthorized = false;
         
         // 1. Verifica se está vinculado diretamente na tabela usuarios
-        if (usuario.servidor_id === servidorId) {
+        if (usuarioRecord.servidor_id === servidorId) {
             isAuthorized = true;
         }
         
@@ -2294,8 +2321,8 @@ window.handlePrimeiroAcesso = async function(e) {
         if (!isAuthorized && servidores[0].email && servidores[0].email.toLowerCase() === email.toLowerCase()) {
             isAuthorized = true;
             // Opcional: já que ele é o dono real, se na tabela de usuarios faltava o ID, podemos atualizar
-            if (!usuario.servidor_id) {
-                await supabaseClient.from('usuarios').update({ servidor_id: servidorId }).eq('id', usuario.id);
+            if (usuarioRecord && !usuarioRecord.servidor_id) {
+                await supabaseClient.from('usuarios').update({ servidor_id: servidorId }).eq('id', usuarioRecord.id);
             }
         }
         
