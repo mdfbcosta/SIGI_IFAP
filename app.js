@@ -2252,7 +2252,7 @@ window.handlePrimeiroAcesso = async function(e) {
         btn.disabled = true;
         btn.innerText = 'Validando SIAPE...';
         
-        const { data: servidores, error: errSrv } = await supabaseClient.from('servidores').select('id, siape, email').eq('siape', siape);
+        const { data: servidores, error: errSrv } = await supabaseClient.from('servidores').select('id, siape, email, nome').eq('siape', siape);
         if (errSrv) throw errSrv;
         
         if (!servidores || servidores.length === 0) {
