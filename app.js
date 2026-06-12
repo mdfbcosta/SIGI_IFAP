@@ -1537,7 +1537,13 @@ function renderCoordChefiados() {
     let macroAreaName = 'Colegiado de Agropecuária';
     let coordName = 'Coordenador não definido';
 
-    if (appState.currentProfile !== 'COORD_COLEGIADO' && appState.chefiadosNivel0) {
+    if (appState.currentProfile === 'COORD_COLEGIADO') {
+        if (appState.userVinculoId) {
+            vinculoFiltroId = appState.userVinculoId;
+            const col = mockColegiados.find(c => c.id === vinculoFiltroId);
+            if (col) macroAreaName = col.nome;
+        }
+    } else if (appState.chefiadosNivel0) {
         const c = mockNivel0Cards.find(card => card.id === appState.chefiadosNivel0);
         if (c) macroAreaName = c.nome;
         

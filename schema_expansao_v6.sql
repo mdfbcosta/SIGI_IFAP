@@ -9,14 +9,14 @@ CREATE TABLE IF NOT EXISTS sistema_config (
 
 ALTER TABLE sistema_config ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Leitura anon config" ON sistema_config;
-CREATE POLICY "Leitura anon config" ON sistema_config FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "Leitura config" ON sistema_config;
+CREATE POLICY "Leitura config" ON sistema_config FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Atualizacao anon config" ON sistema_config;
-CREATE POLICY "Atualizacao anon config" ON sistema_config FOR UPDATE TO anon USING (true);
+DROP POLICY IF EXISTS "Atualizacao config" ON sistema_config;
+CREATE POLICY "Atualizacao config" ON sistema_config FOR UPDATE USING (true);
 
-DROP POLICY IF EXISTS "Insercao anon config" ON sistema_config;
-CREATE POLICY "Insercao anon config" ON sistema_config FOR INSERT TO anon WITH CHECK (true);
+DROP POLICY IF EXISTS "Insercao config" ON sistema_config;
+CREATE POLICY "Insercao config" ON sistema_config FOR INSERT WITH CHECK (true);
 
 -- Inserir permissões padrão iniciais
 INSERT INTO sistema_config (id, valor) VALUES (
