@@ -2352,9 +2352,13 @@ window.selectProfile = function(profileId) {
         'ESTAGIARIO':      'MOD_1',
     };
 
-    const moduloInicial = moduloPrincipal[profileId] || allowedModules[0];
-    // Garante que o módulo inicial está na lista de permitidos
-    appState.activeModule = allowedModules.includes(moduloInicial) ? moduloInicial : allowedModules[0];
+    // Se o usuário tem acesso ao Painel do Servidor, forçar ele a entrar nesse painel por padrão!
+    if (allowedModules.includes('MOD_SERVIDOR')) {
+        appState.activeModule = 'MOD_SERVIDOR';
+    } else {
+        const moduloInicial = moduloPrincipal[profileId] || allowedModules[0];
+        appState.activeModule = allowedModules.includes(moduloInicial) ? moduloInicial : allowedModules[0];
+    }
 
     // Fiscal precisa escolher turno antes da ronda
     if (appState.activeModule === 'MOD_5' && !appState.selectedShift) {
@@ -5819,6 +5823,9 @@ function renderModSuper() {
 async function initApp() {
     const appDiv = document.getElementById('app');
     
+    // Capturar hash inicial antes que o Supabase o limpe (para detectar o magic link)
+    const initialHash = window.location.hash;
+
     // Verificar se há sessão ativa no Supabase
     try {
         const session = await Auth.getCurrentSession();
@@ -5839,7 +5846,7 @@ async function initApp() {
                     if (inst) appState.userVinculoId = inst.id;
                 }
                 
-                if (window.location.hash && window.location.hash.includes('type=magiclink')) {
+                if (initialHash && initialHash.includes('type=magiclink')) {
                     appState.mustSetPassword = true;
                 }
 
