@@ -3209,16 +3209,14 @@ window.toggleStatusDisciplina = async function(id, currentStatus) {
 window.submitDisciplina = async function(e) {
     e.preventDefault();
     const nome = document.getElementById('discNome').value.trim();
-    const nucleo = document.getElementById('discNucleo').value;
-    const codigo = document.getElementById('discCodigo').value.trim();
-
-    const checkboxes = document.querySelectorAll('input[name="discCursos"]:checked');
-    const cursoIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const nucleoHidden = document.getElementById('discNucleoHidden');
+    const nucleoSelect = document.getElementById('discNucleoSelect');
+    const nucleo = nucleoHidden ? nucleoHidden.value : (nucleoSelect ? nucleoSelect.value : '');
 
     const payload = {
         nome: nome,
         nucleo: nucleo,
-        codigo: codigo || null
+        codigo: null
     };
 
     try {
@@ -3232,9 +3230,6 @@ window.submitDisciplina = async function(e) {
             discId = created.id; 
             showToast('Disciplina criada com sucesso!');
         }
-        
-        // Link to courses
-        await DB.disciplinas.setCursos(discId, cursoIds);
         
         closeMod2Modal();
         await loadAllDataFromDB();
@@ -4578,14 +4573,21 @@ function renderModulo2() {
     if (appState.mod2Modal === 'MODAL_DISCIPLINA') {
         const isEdit = !!appState.editDisciplinaId;
         const discData = isEdit ? mockDisciplinas.find(d => d.id === appState.editDisciplinaId) || {} : {};
-        const selCursos = discData.cursosIds || [];
-
-        const cursosCheckboxes = mockCursosCadastrados.map(c => `
-            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
-                <input type="checkbox" name="discCursos" value="${c.id}" ${selCursos.includes(c.id) ? 'checked' : ''}>
-                <span style="font-size: 0.9rem;">${c.nome} <span style="color: var(--text-muted); font-size: 0.75rem;">(${c.modalidade})</span></span>
-            </label>
-        `).join('');
+        
+        let nucleoOptionsHtml = '';
+        let nucleoMessageHtml = '';
+        let disableSelect = 'disabled';
+        let nucleoValue = '';
+        
+        if (appState.currentProfile === 'COORD_COLEGIADO') {
+            nucleoValue = 'Núcleo Específico';
+            nucleoOptionsHtml = `<option value="${nucleoValue}" selected>${nucleoValue}</option>`;
+            nucleoMessageHtml = `<span style="color: #D97706; font-size: 0.8rem; display: block; margin-top: 0.2rem;">⚠️ Você só pode cadastrar disciplinas específicas.</span>`;
+        } else {
+            nucleoValue = 'Núcleo Básico';
+            nucleoOptionsHtml = `<option value="${nucleoValue}" selected>${nucleoValue}</option>`;
+            nucleoMessageHtml = `<span style="color: #D97706; font-size: 0.8rem; display: block; margin-top: 0.2rem;">⚠️ Você só pode cadastrar disciplinas do núcleo básico.</span>`;
+        }
 
         modalHtml = `
             <div class="modal-overlay animate-fade-in" onclick="closeMod2Modal()">
@@ -4598,29 +4600,17 @@ function renderModulo2() {
                         <form onsubmit="window.submitDisciplina(event)" style="display: flex; flex-direction: column; gap: 1rem;">
                             
                             <div>
-                                <label style="font-weight: 500; font-size: 0.9rem;">Código da Disciplina (Opcional)</label>
-                                <input type="text" id="discCodigo" value="${discData.codigo || ''}" placeholder="Ex: BIO101" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
-                            </div>
-
-                            <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Nome da Disciplina *</label>
                                 <input type="text" id="discNome" value="${discData.nome || ''}" required placeholder="Ex: Biologia Celular" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
                             
                             <div>
                                 <label style="font-weight: 500; font-size: 0.9rem;">Núcleo *</label>
-                                <select id="discNucleo" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="Núcleo Básico" ${discData.nucleo === 'Núcleo Básico' ? 'selected' : ''}>Núcleo Básico</option>
-                                    <option value="Núcleo Específico" ${discData.nucleo === 'Núcleo Específico' ? 'selected' : ''}>Núcleo Específico</option>
+                                <select id="discNucleoSelect" ${disableSelect} style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: #F1F5F9; color: #475569; cursor: not-allowed;">
+                                    ${nucleoOptionsHtml}
                                 </select>
-                            </div>
-                            
-                            <div>
-                                <label style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.4rem; display: block;">Vincular a Cursos (Multi-seleção)</label>
-                                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.8rem;">Selecione todos os cursos que utilizam esta disciplina na matriz curricular.</p>
-                                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm);">
-                                    ${cursosCheckboxes || '<span style="color: var(--text-muted); font-size: 0.85rem;">Nenhum curso cadastrado.</span>'}
-                                </div>
+                                <input type="hidden" id="discNucleoHidden" value="${nucleoValue}">
+                                ${nucleoMessageHtml}
                             </div>
 
                             <button type="submit" class="nav-btn" style="width: 100%; margin-top: 1rem;">Salvar Disciplina</button>
