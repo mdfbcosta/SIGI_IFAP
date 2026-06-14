@@ -4660,14 +4660,13 @@ function renderModulo2() {
                     <table class="perms-table" id="disciplinas-table" style="table-layout: fixed;">
                         <thead>
                             <tr>
-                                <th style="text-align: left; width: 35%;">Nome da Disciplina</th>
-                                <th style="text-align: left; width: 15%;">Núcleo</th>
-                                <th style="text-align: left; width: 35%;">Cursos Vinculados</th>
-                                <th style="text-align: left; width: 15%;">Ações</th>
+                                <th style="text-align: left; width: 65%;">Nome da Disciplina</th>
+                                <th style="text-align: left; width: 20%;">Núcleo</th>
+                                <th style="text-align: center; width: 15%;">Ações</th>
                             </tr>
                         </thead>
                         <tbody id="disciplinas-tbody">
-                            <tr><td colspan="4" style="text-align:center;">Carregando disciplinas...</td></tr>
+                            <tr><td colspan="3" style="text-align:center;">Carregando disciplinas...</td></tr>
                         </tbody>
                     </table>
                     <div id="disciplinas-pagination"></div>
@@ -6067,33 +6066,23 @@ window.renderDisciplinasTableBody = function() {
         const badgeStyle = d.nucleo === 'Núcleo Básico'
             ? 'background: #E0F2FE; color: #0284C7; border: 1px solid #BAE6FD;'
             : 'background: #F3E8FF; color: #7E22CE; border: 1px solid #E9D5FF;';
-            
-        let cursosNomes = d.cursosIds.map(cid => {
-            const curso = mockCursosCadastrados.find(c => c.id === cid);
-            return curso ? curso.nome : '';
-        }).filter(n => n !== '').join('<br>• ');
-        
-        if (cursosNomes) cursosNomes = '• ' + cursosNomes;
-        else cursosNomes = '<span style="color: var(--text-muted); font-style: italic;">Nenhum curso vinculado</span>';
 
         const isInactive = d.status === 'INATIVO';
         const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
+        
+        const btnInativarIcon = isInactive ? '✅' : '🚫';
+        const btnInativarTitle = isInactive ? 'Ativar Disciplina' : 'Inativar Disciplina';
 
         return `
             <tr data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
                 <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
-                <td style="font-size: 0.85rem; line-height: 1.4; padding-top: 0.8rem; padding-bottom: 0.8rem;">${cursosNomes}</td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editDisciplina(${d.id})">Editar</button>
-                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">
-                            ${isInactive ? 'Ativar' : 'Inativar'}
-                        </button>
-                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; background-color: #FEF2F2; color: #DC2626;" onclick="window.deleteDisciplina(${d.id})">
-                            Excluir
-                        </button>
+                    <div style="display: flex; gap: 1rem; justify-content: center; align-items: center;">
+                        <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Editar Disciplina" onclick="window.editDisciplina(${d.id})">✏️</button>
+                        <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="${btnInativarTitle}" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">${btnInativarIcon}</button>
+                        <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Excluir Disciplina" onclick="window.deleteDisciplina(${d.id})">🗑️</button>
                     </div>
                 </td>
             </tr>
@@ -6101,7 +6090,7 @@ window.renderDisciplinasTableBody = function() {
     }).join('');
 
     if (paginated.length === 0) {
-        rowsHtml = '<tr><td colspan="4" style="text-align:center; padding: 2rem; color: var(--text-muted);">Nenhuma disciplina encontrada com os filtros atuais.</td></tr>';
+        rowsHtml = '<tr><td colspan="3" style="text-align:center; padding: 2rem; color: var(--text-muted);">Nenhuma disciplina encontrada com os filtros atuais.</td></tr>';
     }
 
     tbody.innerHTML = rowsHtml;
