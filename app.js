@@ -6081,7 +6081,7 @@ window.renderDisciplinasTableBody = function() {
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
 
         return `
-            <tr class="disciplina-row" data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
+            <tr data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
                 <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
                 <td style="font-size: 0.85rem; line-height: 1.4; padding-top: 0.8rem; padding-bottom: 0.8rem;">${cursosNomes}</td>
