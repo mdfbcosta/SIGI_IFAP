@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS disciplinas (
     id BIGSERIAL PRIMARY KEY,
     nome TEXT NOT NULL,
     nucleo TEXT DEFAULT 'Núcleo Básico',
+    criador_colegiado_id BIGINT DEFAULT NULL REFERENCES colegiados(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -285,6 +285,9 @@ let appState = {
     discFilterNucleo: 'Todos',
     discFilterStatus: 'Todos',
     discFilterCurso: 'Todos',
+    mod2SelectedCursoId: null, // Curso selecionado pelo Colegiado para gerenciar grade
+    mod2Modal: null,           // Controle do modal ('MODAL_VINCULAR_EXISTENTE')
+    mod2LinkSearchTerm: '',     // Busca do modal de vínculo
     auditLogs: [
         {
             timestamp: "04/06/2026 09:30:15",
@@ -3232,8 +3235,16 @@ window.submitDisciplina = async function(e) {
             showToast('Disciplina atualizada com sucesso!');
         } else {
             payload.status = 'ATIVO';
+            if (appState.currentProfile === 'COORD_COLEGIADO') {
+                payload.criador_colegiado_id = appState.userVinculoId;
+            }
             const created = await DB.disciplinas.create(payload);
-            discId = created.id; 
+            discId = created.id;
+            
+            // Vincular automaticamente ao curso selecionado se for Colegiado
+            if (appState.currentProfile === 'COORD_COLEGIADO' && appState.mod2SelectedCursoId) {
+                await DB.disciplinas.linkCurso(discId, parseInt(appState.mod2SelectedCursoId));
+            }
             showToast('Disciplina criada com sucesso!');
         }
         
@@ -4555,6 +4566,17 @@ window.closeMod2Modal = function() {
 
 function renderModulo2() {
     let modalHtml = '';
+    const isColegiado = appState.currentProfile === 'COORD_COLEGIADO';
+    
+    // Obter cursos do Colegiado (caso seja Colegiado)
+    let meusCursos = [];
+    if (isColegiado) {
+        meusCursos = mockCursosCadastrados.filter(c => c.vinculo === 'Colegiado' && c.vinculoId === appState.userVinculoId);
+        if (!appState.mod2SelectedCursoId && meusCursos.length > 0) {
+            appState.mod2SelectedCursoId = meusCursos[0].id;
+        }
+    }
+
     if (appState.mod2Modal === 'MODAL_DISCIPLINA') {
         const isEdit = !!appState.editDisciplinaId;
         const discData = isEdit ? mockDisciplinas.find(d => d.id === appState.editDisciplinaId) || {} : {};
@@ -4564,7 +4586,7 @@ function renderModulo2() {
         let disableSelect = 'disabled';
         let nucleoValue = '';
         
-        if (appState.currentProfile === 'COORD_COLEGIADO') {
+        if (isColegiado) {
             nucleoValue = 'Núcleo Específico';
             nucleoOptionsHtml = `<option value="${nucleoValue}" selected>${nucleoValue}</option>`;
             nucleoMessageHtml = `<span style="color: #D97706; font-size: 0.8rem; display: block; margin-top: 0.2rem;">⚠️ Você só pode cadastrar disciplinas específicas.</span>`;
@@ -4604,12 +4626,124 @@ function renderModulo2() {
                 </div>
             </div>
         `;
+    } else if (appState.mod2Modal === 'MODAL_VINCULAR_EXISTENTE') {
+        const activeCursoId = parseInt(appState.mod2SelectedCursoId);
+        let disponiveis = mockDisciplinas.filter(d => !d.cursosIds || !d.cursosIds.includes(activeCursoId));
+
+        if (appState.mod2LinkSearchTerm) {
+            const term = appState.mod2LinkSearchTerm.toLowerCase();
+            disponiveis = disponiveis.filter(d => d.nome.toLowerCase().includes(term));
+        }
+
+        const listHtml = disponiveis.map(d => `
+            <div class="disc-link-item" style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); transition: background-color 0.15s;">
+                <label for="chk-link-${d.id}" style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; cursor: pointer; flex: 1; margin: 0; padding: 0.2rem 0;">
+                    <input type="checkbox" id="chk-link-${d.id}" value="${d.id}" class="disc-link-chk">
+                    <div>
+                        <span style="font-weight: 500;">${d.nome}</span>
+                        <span style="display: block; font-size: 0.75rem; color: var(--text-muted);">${d.nucleo}</span>
+                    </div>
+                </label>
+            </div>
+        `).join('');
+
+        modalHtml = `
+            <style>
+                .disc-link-item:hover { background-color: #F1F5F9; }
+            </style>
+            <div class="modal-overlay animate-fade-in" onclick="window.closeMod2Modal()">
+                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 550px; display: flex; flex-direction: column; max-height: 85vh;">
+                    <div class="modal-header">
+                        <h3>➕ Vincular Disciplina Existente</h3>
+                        <button class="close-btn" onclick="window.closeMod2Modal()">✕</button>
+                    </div>
+                    <div style="padding: 1rem; background: #F8FAFC; border-bottom: 1px solid var(--border-color);">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">
+                            Selecione as disciplinas cadastradas no sistema que você deseja associar a este curso.
+                        </p>
+                        <div style="position: relative;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted);">🔍</span>
+                            <input type="text" placeholder="Buscar disciplina por nome..." onkeyup="window.updateMod2LinkSearch(this.value)" value="${appState.mod2LinkSearchTerm || ''}" style="width: 100%; padding: 0.5rem 0.5rem 0.5rem 2.2rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.9rem;">
+                        </div>
+                    </div>
+                    <div style="flex: 1; overflow-y: auto; min-height: 200px; max-height: 40vh;">
+                        ${disponiveis.length === 0 
+                            ? `<div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.9rem;">Nenhuma disciplina disponível para vincular.</div>`
+                            : listHtml
+                        }
+                    </div>
+                    <div style="padding: 1rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem;">
+                        <button class="nav-btn" style="background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border-color);" onclick="window.closeMod2Modal()">Cancelar</button>
+                        <button class="nav-btn" onclick="window.submitVinculosDisciplinas()" ${disponiveis.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>Vincular Selecionadas</button>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
-    const cursosOptions = mockCursosCadastrados.map(c => `<option value="${c.id}" ${appState.discFilterCurso == c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+    // Ações e Cabeçalhos específicos por Perfil
+    let titleHtml = '<h2>📚 Cadastro de Disciplinas</h2>';
+    let subtitleHtml = '<p style="color: var(--text-muted);">Alimente o banco de disciplinas e ligue-as a múltiplos cursos.</p>';
+    let topControlsHtml = '';
+    let filterCursoHtml = '';
+
+    if (isColegiado) {
+        const activeCurso = meusCursos.find(c => c.id == appState.mod2SelectedCursoId);
+        titleHtml = `<h2>📚 Grade de Disciplinas</h2>`;
+        subtitleHtml = `<p style="color: var(--text-muted);">Gerencie as disciplinas associadas à grade curricular do seu curso.</p>`;
+
+        const cursoOptionsHtml = meusCursos.map(c => 
+            `<option value="${c.id}" ${appState.mod2SelectedCursoId == c.id ? 'selected' : ''}>${c.nome}</option>`
+        ).join('');
+
+        // Se houver mais de um curso, oferecer opção de copiar a grade
+        let copiarGradeHtml = '';
+        if (meusCursos.length > 1) {
+            const outrosCursos = meusCursos.filter(c => c.id != appState.mod2SelectedCursoId);
+            copiarGradeHtml = `
+                <div style="display: flex; gap: 0.5rem; align-items: center; background: #F8FAFC; padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-wrap: wrap;">
+                    <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Copiar grade de:</span>
+                    <select id="copiarCursoOrigemSelect" style="padding: 0.4rem; font-size: 0.85rem; border-radius: 4px; border: 1px solid var(--border-color); background: white;">
+                        ${outrosCursos.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+                    </select>
+                    <button class="nav-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="window.copiarGradeDisciplinas()">Copiar</button>
+                </div>
+            `;
+        }
+
+        topControlsHtml = `
+            <div style="width: 100%; display: flex; flex-direction: column; gap: 1rem; background: #F1F5F9; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <label style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">Curso Selecionado:</label>
+                    <select onchange="window.changeMod2CursoContext(this.value)" style="padding: 0.6rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white; font-weight: 500; font-size: 0.95rem; min-width: 300px; flex: 1; max-width: 500px;">
+                        ${cursoOptionsHtml}
+                    </select>
+                </div>
+                ${copiarGradeHtml}
+            </div>
+        `;
+    } else {
+        const cursosOptions = mockCursosCadastrados.map(c => `<option value="${c.id}" ${appState.discFilterCurso == c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+        filterCursoHtml = `
+            <div style="flex: 1; min-width: 200px;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; display: block;">Curso Vinculado</label>
+                <select onchange="window.updateDiscFilter('curso', this.value)" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
+                    <option value="Todos" ${appState.discFilterCurso === 'Todos' ? 'selected' : ''}>Todos</option>
+                    ${cursosOptions}
+                </select>
+            </div>
+        `;
+    }
+
+    const actionButtonHtml = isColegiado 
+        ? `<div style="display: flex; gap: 0.8rem;">
+             <button class="outline-btn" style="background: white;" onclick="window.openMod2Modal('MODAL_VINCULAR_EXISTENTE')">➕ Vincular Existente</button>
+             <button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>
+           </div>`
+        : `<button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>`;
 
     setTimeout(() => {
-        if(document.getElementById('disciplinas-tbody')) {
+        if (document.getElementById('disciplinas-tbody')) {
             window.renderDisciplinasTableBody();
         }
     }, 0);
@@ -4617,10 +4751,11 @@ function renderModulo2() {
     return `
         <div class="coord-panel animate-fade" style="margin: 0; min-height: 100%;">
             <div class="diario-header" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
-                <h2>📚 Cadastro de Disciplinas</h2>
-                <p style="color: var(--text-muted);">Alimente o banco de disciplinas e ligue-as a múltiplos cursos.</p>
+                ${titleHtml}
+                ${subtitleHtml}
             </div>
             <div style="padding: 1.5rem;">
+                ${topControlsHtml}
                 <div class="table-responsive">
                     <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; background: #F8FAFC; padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
@@ -4628,7 +4763,7 @@ function renderModulo2() {
                                 <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted);">🔍</span>
                                 <input type="text" placeholder="Buscar disciplina por nome..." onkeyup="window.updateDiscFilter('search', this.value)" value="${appState.discSearchTerm}" style="width: 100%; padding: 0.6rem 0.6rem 0.6rem 2.2rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
                             </div>
-                            <button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>
+                            ${actionButtonHtml}
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                             <div style="flex: 1; min-width: 150px;">
@@ -4647,13 +4782,7 @@ function renderModulo2() {
                                     <option value="Inativas" ${appState.discFilterStatus === 'Inativas' ? 'selected' : ''}>Inativas</option>
                                 </select>
                             </div>
-                            <div style="flex: 1; min-width: 200px;">
-                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; display: block;">Curso Vinculado</label>
-                                <select onchange="window.updateDiscFilter('curso', this.value)" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
-                                    <option value="Todos" ${appState.discFilterCurso === 'Todos' ? 'selected' : ''}>Todos</option>
-                                    ${cursosOptions}
-                                </select>
-                            </div>
+                            ${filterCursoHtml}
                         </div>
                     </div>
 
@@ -6034,6 +6163,8 @@ window.renderDisciplinasTableBody = function() {
     const pagContainer = document.getElementById('disciplinas-pagination');
     if (!tbody) return;
 
+    const isColegiado = appState.currentProfile === 'COORD_COLEGIADO';
+
     let filtered = mockDisciplinas.filter(d => {
         let matchTerm = true;
         if (appState.discSearchTerm) {
@@ -6049,8 +6180,13 @@ window.renderDisciplinasTableBody = function() {
             if (appState.discFilterStatus === 'Inativas') matchStatus = d.status === 'INATIVO';
         }
         let matchCurso = true;
-        if (appState.discFilterCurso !== 'Todos') {
-            matchCurso = d.cursosIds && d.cursosIds.includes(parseInt(appState.discFilterCurso));
+        if (isColegiado) {
+            const activeCursoId = parseInt(appState.mod2SelectedCursoId);
+            matchCurso = d.cursosIds && d.cursosIds.includes(activeCursoId);
+        } else {
+            if (appState.discFilterCurso !== 'Todos') {
+                matchCurso = d.cursosIds && d.cursosIds.includes(parseInt(appState.discFilterCurso));
+            }
         }
         return matchTerm && matchNucleo && matchStatus && matchCurso;
     });
@@ -6071,20 +6207,51 @@ window.renderDisciplinasTableBody = function() {
         const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
         
-        const btnInativarIcon = isInactive ? '✅' : '🚫';
-        const btnInativarTitle = isInactive ? 'Ativar Disciplina' : 'Inativar Disciplina';
+        let actionButtons = '';
+        if (isColegiado) {
+            const isOwn = d.criador_colegiado_id === appState.userVinculoId;
+            const editBtn = isOwn
+                ? `<button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Editar Disciplina" onclick="window.editDisciplina(${d.id})">✏️</button>`
+                : `<button style="background: transparent; border: none; opacity: 0.4; cursor: not-allowed; font-size: 1.2rem;" title="Esta disciplina pertence ao núcleo básico ou a outro colegiado e não pode ser editada">✏️</button>`;
+
+            const desvincularBtn = `
+                <button style="background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 4px; color: #EF4444; transition: background 0.1s, transform 0.1s;" 
+                        onmouseover="this.style.background='#FEE2E2'; this.style.transform='scale(1.2)'" 
+                        onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'" 
+                        title="Desvincular do curso" 
+                        onclick="window.desvincularDisciplinaDoCurso(${d.id})">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m18.84 4.96-3.21 3.21M6.23 17.57a3 3 0 1 1-4.24-4.24l3.18-3.18"></path>
+                        <path d="M18.84 10.58a3 3 0 0 1-4.24 4.24l-1.94 1.94"></path>
+                        <path d="M3 21 21 3"></path>
+                    </svg>
+                </button>
+            `;
+
+            actionButtons = `
+                <div style="display: flex; gap: 0.8rem; justify-content: center; align-items: center;">
+                    ${editBtn}
+                    ${desvincularBtn}
+                </div>
+            `;
+        } else {
+            const btnInativarIcon = isInactive ? '✅' : '🚫';
+            const btnInativarTitle = isInactive ? 'Ativar Disciplina' : 'Inativar Disciplina';
+            
+            actionButtons = `
+                <div style="display: flex; gap: 1rem; justify-content: center; align-items: center;">
+                    <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Editar Disciplina" onclick="window.editDisciplina(${d.id})">✏️</button>
+                    <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="${btnInativarTitle}" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">${btnInativarIcon}</button>
+                    <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Excluir Disciplina" onclick="window.deleteDisciplina(${d.id})">🗑️</button>
+                </div>
+            `;
+        }
 
         return `
             <tr data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
                 <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
-                <td>
-                    <div style="display: flex; gap: 1rem; justify-content: center; align-items: center;">
-                        <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Editar Disciplina" onclick="window.editDisciplina(${d.id})">✏️</button>
-                        <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="${btnInativarTitle}" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">${btnInativarIcon}</button>
-                        <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Excluir Disciplina" onclick="window.deleteDisciplina(${d.id})">🗑️</button>
-                    </div>
-                </td>
+                <td>${actionButtons}</td>
             </tr>
         `;
     }).join('');
@@ -6210,4 +6377,77 @@ window.saveProfileEdits = async function() {
         btn.disabled = false;
     }
 }
+
+// ============================================================
+// CALLBACKS DO MÓDULO 2 (CADASTRO/GRADE DE DISCIPLINAS DO COLEGIADO)
+// ============================================================
+
+window.changeMod2CursoContext = function(cursoId) {
+    appState.mod2SelectedCursoId = cursoId;
+    appState.discCurrentPage = 1;
+    render();
+};
+
+window.updateMod2LinkSearch = function(val) {
+    appState.mod2LinkSearchTerm = val;
+    render();
+};
+
+window.desvincularDisciplinaDoCurso = async function(discId) {
+    if (!confirm('Deseja realmente desvincular esta disciplina deste curso?')) return;
+    try {
+        const activeCursoId = parseInt(appState.mod2SelectedCursoId);
+        await DB.disciplinas.unlinkCurso(discId, activeCursoId);
+        showToast('Disciplina desvinculada do curso com sucesso!');
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao desvincular disciplina: ' + err.message);
+    }
+};
+
+window.submitVinculosDisciplinas = async function() {
+    const chks = document.querySelectorAll('.disc-link-chk:checked');
+    if (chks.length === 0) {
+        window.closeMod2Modal();
+        return;
+    }
+    
+    try {
+        const activeCursoId = parseInt(appState.mod2SelectedCursoId);
+        const discIds = Array.from(chks).map(c => parseInt(c.value));
+        
+        for (const did of discIds) {
+            await DB.disciplinas.linkCurso(did, activeCursoId);
+        }
+        
+        showToast(`${discIds.length} disciplina(s) vinculada(s) com sucesso!`);
+        window.closeMod2Modal();
+        appState.mod2LinkSearchTerm = ''; // Reseta termo de busca do modal
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao vincular disciplinas: ' + err.message);
+    }
+};
+
+window.copiarGradeDisciplinas = async function() {
+    const select = document.getElementById('copiarCursoOrigemSelect');
+    if (!select) return;
+    const fromCursoId = parseInt(select.value);
+    const activeCursoId = parseInt(appState.mod2SelectedCursoId);
+    
+    if (!fromCursoId || !activeCursoId) return;
+    if (!confirm('Deseja copiar todas as disciplinas vinculadas àquele curso para o curso atual? As disciplinas já vinculadas serão mantidas e duplicatas serão ignoradas.')) return;
+    
+    try {
+        await DB.disciplinas.copiarVinculosCursos(fromCursoId, activeCursoId);
+        showToast('Grade de disciplinas copiada com sucesso!');
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao copiar grade de disciplinas: ' + err.message);
+    }
+};
+
 

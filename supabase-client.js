@@ -193,6 +193,51 @@ const DB = {
                 const { error } = await supabaseClient.from('disciplinas_cursos').insert(rows);
                 if (error) throw error;
             }
+        },
+        async linkCurso(discId, cursoId) {
+            // Insere relação se não existir (ignora se houver conflito devido a UNIQUE)
+            const { error } = await supabaseClient
+                .from('disciplinas_cursos')
+                .insert({ disciplina_id: discId, curso_id: cursoId });
+            if (error && !error.message.includes('duplicate key')) throw error;
+        },
+        async unlinkCurso(discId, cursoId) {
+            const { error } = await supabaseClient
+                .from('disciplinas_cursos')
+                .delete()
+                .eq('disciplina_id', discId)
+                .eq('curso_id', cursoId);
+            if (error) throw error;
+        },
+        async copiarVinculosCursos(cursoOrigemId, cursoDestinoId) {
+            // 1. Obter todas as disciplinas do curso de origem
+            const { data, error } = await supabaseClient
+                .from('disciplinas_cursos')
+                .select('disciplina_id')
+                .eq('curso_id', cursoOrigemId);
+            if (error) throw error;
+            if (!data || data.length === 0) return;
+
+            // 2. Obter as disciplinas que já estão no curso de destino para evitar duplicar/erro de UNIQUE
+            const { data: destData, error: destError } = await supabaseClient
+                .from('disciplinas_cursos')
+                .select('disciplina_id')
+                .eq('curso_id', cursoDestinoId);
+            if (destError) throw destError;
+            const destIds = new Set((destData || []).map(r => r.disciplina_id));
+
+            // 3. Filtrar apenas as novas disciplinas a serem vinculadas
+            const rowsToInsert = data
+                .map(r => r.disciplina_id)
+                .filter(did => !destIds.has(did))
+                .map(did => ({ disciplina_id: did, curso_id: cursoDestinoId }));
+
+            if (rowsToInsert.length > 0) {
+                const { error: insertErr } = await supabaseClient
+                    .from('disciplinas_cursos')
+                    .insert(rowsToInsert);
+                if (insertErr) throw insertErr;
+            }
         }
     },
 
