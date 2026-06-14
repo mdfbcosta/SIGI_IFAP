@@ -371,7 +371,7 @@ window.loadOfflineData = function() {
 
 const MODULOS_INFO = {
     'MOD_1':         { id: 'MOD_1',         titulo: 'Cad. Colegiados e Cursos',        icone: '🏫' },
-    'MOD_2':         { id: 'MOD_2',         titulo: 'Cad. Disciplinas',                icone: '📚' },
+    'MOD_2':         { id: 'MOD_2',         titulo: 'Cadastrar Disciplina',            icone: '📚' },
     'MOD_3':         { id: 'MOD_3',         titulo: 'Cadastrar Servidor',              icone: '👨‍💼' },
     'MOD_4':         { id: 'MOD_4',         titulo: 'Montagem do Horário Semanal',     icone: '📅' },
     'MOD_5':         { id: 'MOD_5',         titulo: 'Ronda Diária de Presença',        icone: '📱' },
@@ -3239,6 +3239,18 @@ window.submitDisciplina = async function(e) {
     }
 }
 
+window.deleteDisciplina = async function(id) {
+    if (!confirm('Tem certeza que deseja excluir esta disciplina? Esta ação não poderá ser desfeita.')) return;
+    try {
+        await DB.disciplinas.delete(id);
+        showToast('Disciplina excluída com sucesso!');
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Não foi possível excluir a disciplina. Ela pode estar vinculada a outras áreas do sistema (como turmas ou professores).\\nErro detalhado: ' + e.message);
+    }
+}
+
 // ==========================================
 // SERVIDORES CRUD ACTIONS
 // ==========================================
@@ -4544,9 +4556,10 @@ function renderModulo2() {
         let cursosNomes = d.cursosIds.map(cid => {
             const curso = mockCursosCadastrados.find(c => c.id === cid);
             return curso ? curso.nome : '';
-        }).filter(n => n !== '').join(', ');
+        }).filter(n => n !== '').join('<br>• ');
         
-        if (!cursosNomes) cursosNomes = '<span style="color: var(--text-muted); font-style: italic;">Nenhum curso vinculado</span>';
+        if (cursosNomes) cursosNomes = '• ' + cursosNomes;
+        else cursosNomes = '<span style="color: var(--text-muted); font-style: italic;">Nenhum curso vinculado</span>';
 
         const isInactive = d.status === 'INATIVO';
         const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
@@ -4556,12 +4569,15 @@ function renderModulo2() {
             <tr style="${opacityStyle}">
                 <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
-                <td style="font-size: 0.9rem; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${cursosNomes}">${cursosNomes}</td>
+                <td style="font-size: 0.85rem; line-height: 1.4; padding-top: 0.8rem; padding-bottom: 0.8rem;">${cursosNomes}</td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editDisciplina(${d.id})">Editar</button>
                         <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">
                             ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; background-color: #FEF2F2; color: #DC2626;" onclick="window.deleteDisciplina(${d.id})">
+                            Excluir
                         </button>
                     </div>
                 </td>
