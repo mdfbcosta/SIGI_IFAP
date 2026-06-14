@@ -74,6 +74,14 @@ CREATE TABLE IF NOT EXISTS servidores_disciplinas (
     UNIQUE(servidor_id, disciplina_id)
 );
 
+-- Relação N:N entre servidores e colegiados (Atuação/Membro)
+CREATE TABLE IF NOT EXISTS servidores_colegiados (
+    id BIGSERIAL PRIMARY KEY,
+    servidor_id BIGINT NOT NULL REFERENCES servidores(id) ON DELETE CASCADE,
+    colegiado_id BIGINT NOT NULL REFERENCES colegiados(id) ON DELETE CASCADE,
+    UNIQUE(servidor_id, colegiado_id)
+);
+
 -- 1.6 Salas (para ronda)
 CREATE TABLE IF NOT EXISTS salas (
     id BIGSERIAL PRIMARY KEY,

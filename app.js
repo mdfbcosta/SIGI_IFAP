@@ -14,6 +14,7 @@ let mockTemplates = [];
 let mockEtapasAvaliativas = [];
 let mockGradesSemanais = {};
 let mockProfessores = []; // Alias para servidores (mantido por compatibilidade)
+let mockServidoresColegiados = [];
 
 // Dados derivados para visualização do Coordenador (serão calculados após carregar do DB)
 let mockCursosCoord = [];
@@ -62,6 +63,7 @@ async function loadAllDataFromDB() {
         })));
 
         mockTransferencias = await DB.transferencias.fetchAll();
+        mockServidoresColegiados = await fetchAll('servidores_colegiados');
 
         // Carregar disciplinas de cada servidor (relação N:N)
         for (const serv of mockServidores) {
@@ -3353,19 +3355,14 @@ window.submitServidor = async function(e) {
     const email = document.getElementById('srvEmail').value.trim();
     const telefone = document.getElementById('srvTelefone').value.trim();
 
-    let vinculo = tipo === 'Docente' ? 'Colegiado' : 'Instância';
-    let vinculoId = null;
-
-    if (tipo === 'Docente') {
-        vinculoId = document.getElementById('srvCol').value;
-    } else {
-        vinculoId = document.getElementById('srvInst').value;
-    }
-
-    if (!vinculoId) {
-        alert(`Por favor, selecione a ${tipo === 'Docente' ? 'Colegiado' : 'Instância'} de vínculo.`);
+    const chefiaVal = document.getElementById('srvChefia').value;
+    if (!chefiaVal) {
+        alert('Por favor, selecione a Chefia Imediata.');
         return;
     }
+    
+    const [vinculo, vinculoIdStr] = chefiaVal.split('_');
+    const vinculoId = parseInt(vinculoIdStr);
 
     const payload = {
         nome: nome,
@@ -3374,8 +3371,19 @@ window.submitServidor = async function(e) {
         email: email,
         telefone: telefone,
         vinculo: vinculo,
-        vinculo_id: parseInt(vinculoId)
+        vinculo_id: vinculoId
     };
+
+    // Pegar atuação em colegiados
+    const colCheckboxes = document.querySelectorAll('input[name="srvAtuacaoCol"]:checked');
+    const colIds = Array.from(colCheckboxes).map(cb => parseInt(cb.value));
+    
+    // Se o coordenador atual estiver salvando e a opção do seu colegiado estiver desabilitada, ela não vai no form
+    if (appState.currentProfile === 'COORD_COLEGIADO') {
+        if (!colIds.includes(appState.userVinculoId)) {
+            colIds.push(appState.userVinculoId); // Always include his own colegiado
+        }
+    }
 
     // Pega as disciplinas
     const discCheckboxes = document.querySelectorAll('input[name="srvDisc"]:checked');
@@ -3396,6 +3404,21 @@ window.submitServidor = async function(e) {
         // Link to disciplinas
         await DB.servidores.setDisciplinas(servId, discIds);
         
+        // Sincronizar Membros de Colegiados
+        // Primeiro limpar os antigos
+        const oldCols = mockServidoresColegiados.filter(sc => sc.servidor_id === servId).map(sc => sc.colegiado_id);
+        for (const oid of oldCols) {
+            if (!colIds.includes(oid)) {
+                await DB.servidores.unlinkColegiado(servId, oid);
+            }
+        }
+        // Depois vincular os novos
+        for (const nid of colIds) {
+            if (!oldCols.includes(nid)) {
+                await DB.servidores.linkColegiado(servId, nid);
+            }
+        }
+        
         appState.mod3Modal = null;
         await loadAllDataFromDB();
         render();
@@ -3406,21 +3429,14 @@ window.submitServidor = async function(e) {
 
 window.onChangeTipoServidor = function() {
     const tipo = document.getElementById('tipoServidor')?.value;
-    const contCol = document.getElementById('containerColServidor');
-    const contInst = document.getElementById('containerInstServidor');
+    const contAtuacao = document.getElementById('containerAtuacaoCols');
     const contDisc = document.getElementById('containerDisciplinas');
-    const txtChefia = document.getElementById('textoChefiaServidor');
     
-    if (!contCol || !contInst || !contDisc || !txtChefia) return;
+    if (!contDisc) return;
 
     const isDocente = tipo === 'Docente';
-    contCol.style.display = isDocente ? 'block' : 'none';
-    contInst.style.display = isDocente ? 'none' : 'block';
+    if(contAtuacao) contAtuacao.style.display = isDocente ? 'block' : 'none';
     contDisc.style.display = isDocente ? 'block' : 'none';
-    
-    txtChefia.value = isDocente 
-        ? "Coordenador do Colegiado selecionado" 
-        : "Responsável pela Instância selecionada";
 }
 
 // Logic to conditionally render fields based on Modalidade
@@ -3893,17 +3909,14 @@ window.closeMod3Modal = function() {
 
 window.onChangeTipoServidor = function() {
     const tipo = document.getElementById('tipoServidor')?.value;
-    if(!tipo) return;
+    const contAtuacao = document.getElementById('containerAtuacaoCols');
+    const contDisc = document.getElementById('containerDisciplinas');
     
+    if (!contDisc) return;
+
     const isDocente = tipo === 'Docente';
-    
-    document.getElementById('containerColServidor').style.display = isDocente ? 'block' : 'none';
-    document.getElementById('containerInstServidor').style.display = isDocente ? 'none' : 'block';
-    document.getElementById('containerDisciplinas').style.display = isDocente ? 'block' : 'none';
-    
-    document.getElementById('textoChefiaServidor').value = isDocente 
-        ? "Coordenador do Colegiado selecionado" 
-        : "Responsável pela Instância selecionada";
+    if(contAtuacao) contAtuacao.style.display = isDocente ? 'block' : 'none';
+    contDisc.style.display = isDocente ? 'block' : 'none';
 }
 
 window.changeMod3Tab = function(tab) {
@@ -3912,17 +3925,161 @@ window.changeMod3Tab = function(tab) {
 }
 
 function renderServidoresTab() {
-    let filteredServidores = mockServidores;
-    
-    // Filtro por Perfil
+    const termoBusca = (appState.buscaServidor || '').toLowerCase();
+
     if (appState.currentProfile === 'COORD_COLEGIADO') {
-        filteredServidores = mockServidores.filter(s => s.vinculo === 'Colegiado' && s.vinculoId == appState.userVinculoId);
-    } else if (appState.currentProfile === 'COPED') {
+        const chefiados = mockServidores.filter(s => s.vinculo === 'Colegiado' && s.vinculoId == appState.userVinculoId);
+        
+        const relacoes = mockServidoresColegiados.filter(sc => sc.colegiado_id == appState.userVinculoId);
+        const membrosIds = relacoes.map(sc => sc.servidor_id);
+        const membros = mockServidores.filter(s => membrosIds.includes(s.id));
+
+        const rowsChefiados = chefiados.map(s => {
+            const sColsIds = mockServidoresColegiados.filter(sc => sc.servidor_id === s.id).map(sc => sc.colegiado_id);
+            const tags = sColsIds.map(cid => {
+                const c = mockColegiados.find(col => col.id === cid);
+                return c ? `<span style="background: #E0E7FF; color: #4338CA; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-right: 0.3rem;">${c.sigla || c.nome}</span>` : '';
+            }).join('');
+
+            const isInactive = s.status === 'INATIVO';
+            const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+            const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
+
+            const sNome = s.nome.toLowerCase();
+            const sSiape = (s.siape || '').toLowerCase();
+            const matchesBusca = !termoBusca || sNome.includes(termoBusca) || sSiape.includes(termoBusca);
+            const displayStyle = matchesBusca ? '' : 'display: none;';
+
+            const exportBtn = s.tipo === 'Docente' ? `<button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Mudar Chefia Imediata (Exportar)" onclick="window.openExportarModal(${s.id})">📤</button>` : '';
+
+            return `
+                <tr class="servidor-row" style="${opacityStyle} ${displayStyle}">
+                    <td style="font-weight: 500;">${s.nome} ${statusBadge}</td>
+                    <td>${s.siape}</td>
+                    <td>${s.email}</td>
+                    <td>${tags || '-'}</td>
+                    <td>
+                        <div style="display: flex; gap: 0.8rem; justify-content: center; align-items: center;">
+                            <button style="background: transparent; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'" title="Editar Servidor" onclick="window.editServidor(${s.id})">✏️</button>
+                            ${exportBtn}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        const rowsMembros = membros.map(s => {
+            let chefiaTxt = '';
+            if (s.vinculo === 'Colegiado') {
+                const col = mockColegiados.find(c => c.id === s.vinculoId);
+                if (col) {
+                    const coord = mockServidores.find(srv => srv.id === col.coordenadorId);
+                    chefiaTxt = coord ? `${coord.nome} (${col.nome})` : `Coordenador (${col.nome})`;
+                } else {
+                    chefiaTxt = '-';
+                }
+            } else {
+                const inst = mockInstancias.find(i => i.id === s.vinculoId);
+                if (inst) {
+                    const resp = mockServidores.find(srv => srv.id === inst.responsavelId);
+                    chefiaTxt = resp ? `${resp.nome} (${inst.nome})` : `Responsável (${inst.nome})`;
+                } else {
+                    chefiaTxt = '-';
+                }
+            }
+
+            const isInactive = s.status === 'INATIVO';
+            const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+            const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
+
+            const sNome = s.nome.toLowerCase();
+            const sSiape = (s.siape || '').toLowerCase();
+            const matchesBusca = !termoBusca || sNome.includes(termoBusca) || sSiape.includes(termoBusca);
+            const displayStyle = matchesBusca ? '' : 'display: none;';
+
+            const desvincularBtn = `
+                <button style="background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 4px; color: #EF4444; transition: background 0.1s, transform 0.1s;" 
+                        onmouseover="this.style.background='#FEE2E2'; this.style.transform='scale(1.2)'" 
+                        onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'" 
+                        title="Desvincular do Colegiado" 
+                        onclick="window.desvincularMembroColegiado(${s.id})">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m18.84 4.96-3.21 3.21M6.23 17.57a3 3 0 1 1-4.24-4.24l3.18-3.18"></path>
+                        <path d="M18.84 10.58a3 3 0 0 1-4.24 4.24l-1.94 1.94"></path>
+                        <path d="M3 21 21 3"></path>
+                    </svg>
+                </button>
+            `;
+
+            return `
+                <tr class="servidor-row" style="${opacityStyle} ${displayStyle}">
+                    <td style="font-weight: 500;">${s.nome} ${statusBadge}</td>
+                    <td>${s.siape}</td>
+                    <td>${s.email}</td>
+                    <td><span style="font-size: 0.85rem; color: var(--text-muted);">${chefiaTxt}</span></td>
+                    <td>
+                        <div style="display: flex; gap: 0.8rem; justify-content: center; align-items: center;">
+                            ${desvincularBtn}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
+                <input type="text" placeholder="🔍 Pesquisar por nome ou SIAPE..." value="${appState.buscaServidor || ''}" oninput="appState.buscaServidor = this.value; window.filterServidoresTable(this.value);" style="padding: 0.6rem 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); min-width: 300px; max-width: 100%;">
+            </div>
+            
+            <h3 style="margin-top: 1.5rem; margin-bottom: 1rem; color: var(--text-main); display: flex; align-items: center; justify-content: space-between;">
+                <span>👨‍💼 Meus Chefiados</span>
+                <button class="nav-btn" onclick="window.openServidorModal()" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">+ Novo Chefiado</button>
+            </h3>
+            <div class="table-responsive" style="margin-bottom: 2rem;">
+                <table id="chefiados-table" class="perms-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">Nome</th>
+                            <th style="text-align: left;">SIAPE</th>
+                            <th style="text-align: left;">E-mail</th>
+                            <th style="text-align: left;">Participação em Colegiados</th>
+                            <th style="text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsChefiados || '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum chefiado encontrado.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--text-main); display: flex; align-items: center; justify-content: space-between;">
+                <span>👥 Membros do Colegiado</span>
+                <button class="nav-btn" onclick="window.openAdicionarMembroModal()" style="font-size: 0.85rem; padding: 0.4rem 0.8rem; background: #6366F1;">+ Adicionar Membro</button>
+            </h3>
+            <div class="table-responsive">
+                <table id="membros-table" class="perms-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">Nome</th>
+                            <th style="text-align: left;">SIAPE</th>
+                            <th style="text-align: left;">E-mail</th>
+                            <th style="text-align: left;">Chefia Imediata</th>
+                            <th style="text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsMembros || '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhum membro encontrado.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // Visão Global
+    let filteredServidores = mockServidores;
+    if (appState.currentProfile === 'COPED') {
         filteredServidores = mockServidores.filter(s => s.vinculo === 'Instância' && s.vinculoId == appState.userVinculoId);
     }
-    
-    // Termo de busca para aplicar estilo nas linhas (DOM filtering)
-    const termoBusca = (appState.buscaServidor || '').toLowerCase();
 
     const rows = filteredServidores.map(s => {
         let vinculoTxt = '';
@@ -3947,8 +4104,8 @@ function renderServidoresTab() {
         const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativo</span>' : '';
 
-        // SÓ pode exportar docentes se for coordenador ou direção geral/ensino
-        const canExport = s.tipo === 'Docente' && (appState.currentProfile === 'DIR_GERAL' || appState.currentProfile === 'COGEN' || appState.currentProfile === 'COORD_COLEGIADO');
+        // SÓ pode exportar docentes se for direção geral/ensino
+        const canExport = s.tipo === 'Docente' && (appState.currentProfile === 'DIR_GERAL' || appState.currentProfile === 'COGEN');
         const exportBtn = canExport ? `<button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #2b9938; color: #2b9938;" onclick="window.openExportarModal(${s.id})">Exportar</button>` : '';
 
         const sNome = s.nome.toLowerCase();
@@ -3990,7 +4147,7 @@ function renderServidoresTab() {
                         <th style="text-align: left;">Tipo</th>
                         <th style="text-align: left;">SIAPE</th>
                         <th style="text-align: left;">E-mail</th>
-                        <th style="text-align: left;">Vínculo</th>
+                        <th style="text-align: left;">Chefia Imediata</th>
                         <th style="text-align: left;">Ações</th>
                     </tr>
                 </thead>
@@ -4109,6 +4266,46 @@ window.responderTransferencia = async function(transfId, status, servidorId, nov
     }
 }
 
+window.desvincularMembroColegiado = async function(servidorId) {
+    if (!confirm('Deseja realmente remover este membro do seu Colegiado? Esta ação não excluirá o servidor do sistema nem mudará sua Chefia Imediata original.')) return;
+    try {
+        await DB.servidores.unlinkColegiado(servidorId, appState.userVinculoId);
+        showToast('Membro desvinculado com sucesso!');
+        await loadAllDataFromDB();
+        render();
+    } catch (e) {
+        alert('Erro ao desvincular membro: ' + e.message);
+    }
+}
+
+window.openAdicionarMembroModal = function() {
+    appState.mod3Modal = 'MODAL_ADD_MEMBRO';
+    render();
+}
+
+window.submitAdicionarMembro = async function(e) {
+    e.preventDefault();
+    const cbs = document.querySelectorAll('input[name="addMembroCb"]:checked');
+    if (cbs.length === 0) {
+        alert('Selecione ao menos um docente para adicionar.');
+        return;
+    }
+    const servIds = Array.from(cbs).map(cb => parseInt(cb.value));
+    
+    try {
+        for (const servId of servIds) {
+            await DB.servidores.linkColegiado(servId, appState.userVinculoId);
+        }
+        showToast(servIds.length + ' membro(s) adicionado(s) com sucesso!');
+        window.closeMod3Modal();
+        await loadAllDataFromDB();
+        render();
+    } catch (err) {
+        alert('Erro ao adicionar membros: ' + err.message);
+    }
+}
+
+
 function renderModulo3() {
     appState.mod3Tab = appState.mod3Tab || 'SERVIDORES';
     
@@ -4123,7 +4320,44 @@ function renderModulo3() {
 
 
     let modalHtml = '';
-    if (appState.mod3Modal === 'MODAL_EXPORTAR') {
+    if (appState.mod3Modal === 'MODAL_ADD_MEMBRO') {
+        const isCol = appState.currentProfile === 'COORD_COLEGIADO';
+        
+        // List only Docentes that are NOT currently members of this colegiado
+        const currentMembrosIds = mockServidoresColegiados.filter(sc => sc.colegiado_id == appState.userVinculoId).map(sc => sc.servidor_id);
+        const addOptions = mockServidores.filter(s => s.tipo === 'Docente' && !currentMembrosIds.includes(s.id)).map(s => `
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
+                <input type="checkbox" name="addMembroCb" value="${s.id}">
+                <span style="font-size: 0.85rem;">${s.nome} <span style="color: var(--text-muted); font-size: 0.75rem;">(${s.siape || 'Sem SIAPE'})</span></span>
+            </label>
+        `).join('');
+
+        modalHtml = `
+            <div class="modal-overlay animate-fade-in" onclick="closeMod3Modal()">
+                <div class="modal-content animate-slide-up" onclick="event.stopPropagation()" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>➕ Adicionar Membro (Docente)</h3>
+                        <button class="close-btn" onclick="closeMod3Modal()">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <form onsubmit="window.submitAdicionarMembro(event)">
+                            <label style="font-weight: 500; font-size: 0.9rem; display: block; margin-bottom: 0.4rem;">Selecione os docentes para adicionar ao Colegiado:</label>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.8rem;">Dica: Você pode selecionar vários de uma vez.</p>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm); background: #f9fafb;">
+                                ${addOptions || '<span style="color: var(--text-muted); font-size: 0.85rem; padding: 1rem; text-align: center;">Não há docentes disponíveis para adicionar.</span>'}
+                            </div>
+                            
+                            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                                <button type="button" class="outline-btn" onclick="closeMod3Modal()">Cancelar</button>
+                                <button type="submit" class="nav-btn" style="background: #6366F1;">Adicionar Selecionados</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (appState.mod3Modal === 'MODAL_EXPORTAR') {
         const servData = mockServidores.find(s => s.id === appState.exportarServidorId) || {};
         const isCol = appState.currentProfile === 'COORD_COLEGIADO';
         
@@ -4191,12 +4425,12 @@ function renderModulo3() {
         setTimeout(() => {
             if (window.onChangeTipoServidor) window.onChangeTipoServidor();
             if (isCol) {
-                const sel = document.getElementById('srvCol');
-                if (sel) { sel.value = appState.userVinculoId; sel.disabled = true; }
+                const sel = document.getElementById('srvChefia');
+                if (sel) { sel.value = 'Colegiado_' + appState.userVinculoId; sel.disabled = true; }
             }
             if (isCoped) {
-                const sel = document.getElementById('srvInst');
-                if (sel) { sel.value = appState.userVinculoId; sel.disabled = true; }
+                const sel = document.getElementById('srvChefia');
+                if (sel) { sel.value = 'Instância_' + appState.userVinculoId; sel.disabled = true; }
             }
         }, 10);
         
@@ -4238,29 +4472,31 @@ function renderModulo3() {
                                 <input type="text" id="srvTelefone" value="${srvData.telefone || ''}" placeholder="(XX) 9XXXX-XXXX" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem;">
                             </div>
 
-                            <div style="grid-column: span 2; display: none;">
-                                <input type="hidden" id="srvVinculo" value="${defaultVinculoType}">
-                            </div>
-
-                            <div id="containerColServidor" style="grid-column: span 2; ${defaultVinculoType === 'Colegiado' ? '' : 'display:none;'}">
-                                <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Colegiado) *</label>
-                                <select id="srvCol" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="">-- Selecionar Colegiado --</option>
-                                    ${colOptions}
-                                </select>
-                            </div>
-
-                            <div id="containerInstServidor" style="grid-column: span 2; ${defaultVinculoType === 'Instância' ? '' : 'display:none;'}">
-                                <label style="font-weight: 500; font-size: 0.9rem;">Vínculo (Instância Administrativa) *</label>
-                                <select id="srvInst" style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;">
-                                    <option value="">-- Selecionar Instância --</option>
-                                    ${instOptions}
-                                </select>
-                            </div>
-                            
                             <div style="grid-column: span 2;">
-                                <label style="font-weight: 500; font-size: 0.9rem;">Chefia Imediata (Automático)</label>
-                                <input type="text" id="textoChefiaServidor" disabled style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: #f3f4f6; color: #6b7280; font-weight: 600;">
+                                <label style="font-weight: 500; font-size: 0.9rem;">Chefia Imediata *</label>
+                                <select id="srvChefia" required style="width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 0.4rem; background: white;" ${isCol ? 'disabled' : ''}>
+                                    <option value="">-- Selecionar Chefia Imediata --</option>
+                                    <optgroup label="Colegiados">
+                                        ${mockColegiados.map(c => `<option value="Colegiado_${c.id}" ${defaultVinculoType === 'Colegiado' && vinculoIdToUse == c.id ? 'selected' : ''}>${c.nome}</option>`).join('')}
+                                    </optgroup>
+                                    <optgroup label="Instâncias Administrativas">
+                                        ${mockInstancias.map(i => `<option value="Instância_${i.id}" ${defaultVinculoType === 'Instância' && vinculoIdToUse == i.id ? 'selected' : ''}>${i.nome}</option>`).join('')}
+                                    </optgroup>
+                                </select>
+                            </div>
+
+                            <div id="containerAtuacaoCols" style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem; ${srvData.tipo === 'Docente' ? '' : 'display:none;'}">
+                                <label style="font-weight: 500; font-size: 0.9rem; display: block; margin-bottom: 0.4rem;">Atuação em Colegiados (Membro)</label>
+                                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.8rem;">Selecione os colegiados nos quais este servidor atua como membro.</p>
+                                <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 150px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: var(--radius-sm);">
+                                    ${mockColegiados.map(c => {
+                                        let atuacaoCols = srvData.id ? mockServidoresColegiados.filter(sc => sc.servidor_id === srvData.id).map(sc => sc.colegiado_id) : (isCol ? [appState.userVinculoId] : []);
+                                        return `<label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer;">
+                                            <input type="checkbox" name="srvAtuacaoCol" value="${c.id}" ${atuacaoCols.includes(c.id) ? 'checked' : ''} ${isCol && c.id == appState.userVinculoId ? 'disabled checked' : ''}>
+                                            <span style="font-size: 0.85rem;">${c.nome}</span>
+                                        </label>`;
+                                    }).join('') || '<span style="color: var(--text-muted); font-size: 0.85rem;">Nenhum colegiado cadastrado.</span>'}
+                                </div>
                             </div>
                             
                             <div id="containerDisciplinas" style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem; ${srvData.tipo === 'Docente' ? '' : 'display:none;'}">

@@ -247,6 +247,20 @@ const DB = {
         create: (row) => insertRow('servidores', row),
         update: (id, data) => updateRow('servidores', id, data),
         delete: (id) => deleteRow('servidores', id),
+        async linkColegiado(servId, colId) {
+            const { error } = await supabaseClient
+                .from('servidores_colegiados')
+                .insert({ servidor_id: servId, colegiado_id: colId });
+            if (error && !error.message.includes('duplicate key')) throw error;
+        },
+        async unlinkColegiado(servId, colId) {
+            const { error } = await supabaseClient
+                .from('servidores_colegiados')
+                .delete()
+                .eq('servidor_id', servId)
+                .eq('colegiado_id', colId);
+            if (error) throw error;
+        },
         async fetchWithDisciplinas(servId) {
             const { data, error } = await supabaseClient
                 .from('servidores_disciplinas')
