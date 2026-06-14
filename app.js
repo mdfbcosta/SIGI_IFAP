@@ -279,6 +279,12 @@ let appState = {
     modalSubstituto: null,
     chefiadosTab: 'CARDS', // 'CARDS' ou 'PENDENCIAS'
     auditTab: 'RBAC', // 'RBAC' ou 'AUDIT'
+    discCurrentPage: 1,
+    discItemsPerPage: 20,
+    discSearchTerm: '',
+    discFilterNucleo: 'Todos',
+    discFilterStatus: 'Todos',
+    discFilterCurso: 'Todos',
     auditLogs: [
         {
             timestamp: "04/06/2026 09:30:15",
@@ -4548,43 +4554,6 @@ window.closeMod2Modal = function() {
 }
 
 function renderModulo2() {
-    const rows = mockDisciplinas.map(d => {
-        const badgeStyle = d.nucleo === 'Núcleo Básico'
-            ? 'background: #E0F2FE; color: #0284C7; border: 1px solid #BAE6FD;'
-            : 'background: #F3E8FF; color: #7E22CE; border: 1px solid #E9D5FF;';
-            
-        let cursosNomes = d.cursosIds.map(cid => {
-            const curso = mockCursosCadastrados.find(c => c.id === cid);
-            return curso ? curso.nome : '';
-        }).filter(n => n !== '').join('<br>• ');
-        
-        if (cursosNomes) cursosNomes = '• ' + cursosNomes;
-        else cursosNomes = '<span style="color: var(--text-muted); font-style: italic;">Nenhum curso vinculado</span>';
-
-        const isInactive = d.status === 'INATIVO';
-        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
-        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
-
-        return `
-            <tr class="disciplina-row" data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
-                <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
-                <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
-                <td style="font-size: 0.85rem; line-height: 1.4; padding-top: 0.8rem; padding-bottom: 0.8rem;">${cursosNomes}</td>
-                <td>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editDisciplina(${d.id})">Editar</button>
-                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">
-                            ${isInactive ? 'Ativar' : 'Inativar'}
-                        </button>
-                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; background-color: #FEF2F2; color: #DC2626;" onclick="window.deleteDisciplina(${d.id})">
-                            Excluir
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
-
     let modalHtml = '';
     if (appState.mod2Modal === 'MODAL_DISCIPLINA') {
         const isEdit = !!appState.editDisciplinaId;
@@ -4637,6 +4606,14 @@ function renderModulo2() {
         `;
     }
 
+    const cursosOptions = mockCursosCadastrados.map(c => `<option value="${c.id}" ${appState.discFilterCurso == c.id ? 'selected' : ''}>${c.nome}</option>`).join('');
+
+    setTimeout(() => {
+        if(document.getElementById('disciplinas-tbody')) {
+            window.renderDisciplinasTableBody();
+        }
+    }, 0);
+
     return `
         <div class="coord-panel animate-fade" style="margin: 0; min-height: 100%;">
             <div class="diario-header" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
@@ -4645,26 +4622,55 @@ function renderModulo2() {
             </div>
             <div style="padding: 1.5rem;">
                 <div class="table-responsive">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
-                        <div style="flex: 1; max-width: 400px; position: relative;">
-                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted);">🔍</span>
-                            <input type="text" placeholder="Buscar disciplina por nome..." onkeyup="window.filterDisciplinasTable(this.value)" style="width: 100%; padding: 0.6rem 0.6rem 0.6rem 2.2rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                    <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; background: #F8FAFC; padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <div style="flex: 1; min-width: 250px; position: relative;">
+                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted);">🔍</span>
+                                <input type="text" placeholder="Buscar disciplina por nome..." onkeyup="window.updateDiscFilter('search', this.value)" value="${appState.discSearchTerm}" style="width: 100%; padding: 0.6rem 0.6rem 0.6rem 2.2rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                            </div>
+                            <button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>
                         </div>
-                        <button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; display: block;">Núcleo</label>
+                                <select onchange="window.updateDiscFilter('nucleo', this.value)" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
+                                    <option value="Todos" ${appState.discFilterNucleo === 'Todos' ? 'selected' : ''}>Todos</option>
+                                    <option value="Núcleo Básico" ${appState.discFilterNucleo === 'Núcleo Básico' ? 'selected' : ''}>Núcleo Básico</option>
+                                    <option value="Núcleo Específico" ${appState.discFilterNucleo === 'Núcleo Específico' ? 'selected' : ''}>Núcleo Específico</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1; min-width: 150px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; display: block;">Status</label>
+                                <select onchange="window.updateDiscFilter('status', this.value)" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
+                                    <option value="Todos" ${appState.discFilterStatus === 'Todos' ? 'selected' : ''}>Todos</option>
+                                    <option value="Ativas" ${appState.discFilterStatus === 'Ativas' ? 'selected' : ''}>Ativas</option>
+                                    <option value="Inativas" ${appState.discFilterStatus === 'Inativas' ? 'selected' : ''}>Inativas</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; display: block;">Curso Vinculado</label>
+                                <select onchange="window.updateDiscFilter('curso', this.value)" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: white;">
+                                    <option value="Todos" ${appState.discFilterCurso === 'Todos' ? 'selected' : ''}>Todos</option>
+                                    ${cursosOptions}
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    <table class="perms-table" id="disciplinas-table">
+
+                    <table class="perms-table" id="disciplinas-table" style="table-layout: fixed;">
                         <thead>
                             <tr>
-                                <th style="text-align: left;">Nome da Disciplina</th>
-                                <th style="text-align: left;">Núcleo</th>
-                                <th style="text-align: left;">Cursos Vinculados</th>
-                                <th style="text-align: left;">Ações</th>
+                                <th style="text-align: left; width: 35%;">Nome da Disciplina</th>
+                                <th style="text-align: left; width: 15%;">Núcleo</th>
+                                <th style="text-align: left; width: 35%;">Cursos Vinculados</th>
+                                <th style="text-align: left; width: 15%;">Ações</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            ${rows}
+                        <tbody id="disciplinas-tbody">
+                            <tr><td colspan="4" style="text-align:center;">Carregando disciplinas...</td></tr>
                         </tbody>
                     </table>
+                    <div id="disciplinas-pagination"></div>
                 </div>
             </div>
         </div>
@@ -6003,18 +6009,113 @@ window.filterServidoresTable = function(term) {
     });
 }
 
-window.filterDisciplinasTable = function(term) {
-    term = term.toLowerCase();
-    const rows = document.querySelectorAll('#disciplinas-table tbody tr.disciplina-row');
-    rows.forEach(row => {
-        const nome = row.getAttribute('data-nome').toLowerCase();
-        if (nome.includes(term)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
+window.updateDiscFilter = function(type, val) {
+    if (type === 'search') appState.discSearchTerm = val;
+    if (type === 'nucleo') appState.discFilterNucleo = val;
+    if (type === 'status') appState.discFilterStatus = val;
+    if (type === 'curso') appState.discFilterCurso = val;
+    appState.discCurrentPage = 1;
+    window.renderDisciplinasTableBody();
+};
+
+window.prevDiscPage = function() {
+    if (appState.discCurrentPage > 1) {
+        appState.discCurrentPage--;
+        window.renderDisciplinasTableBody();
+    }
+};
+
+window.nextDiscPage = function() {
+    appState.discCurrentPage++;
+    window.renderDisciplinasTableBody();
+};
+
+window.renderDisciplinasTableBody = function() {
+    const tbody = document.getElementById('disciplinas-tbody');
+    const pagContainer = document.getElementById('disciplinas-pagination');
+    if (!tbody) return;
+
+    let filtered = mockDisciplinas.filter(d => {
+        let matchTerm = true;
+        if (appState.discSearchTerm) {
+            matchTerm = d.nome.toLowerCase().includes(appState.discSearchTerm.toLowerCase());
         }
+        let matchNucleo = true;
+        if (appState.discFilterNucleo !== 'Todos') {
+            matchNucleo = d.nucleo === appState.discFilterNucleo;
+        }
+        let matchStatus = true;
+        if (appState.discFilterStatus !== 'Todos') {
+            if (appState.discFilterStatus === 'Ativas') matchStatus = d.status !== 'INATIVO';
+            if (appState.discFilterStatus === 'Inativas') matchStatus = d.status === 'INATIVO';
+        }
+        let matchCurso = true;
+        if (appState.discFilterCurso !== 'Todos') {
+            matchCurso = d.cursosIds && d.cursosIds.includes(parseInt(appState.discFilterCurso));
+        }
+        return matchTerm && matchNucleo && matchStatus && matchCurso;
     });
-}
+
+    const totalPages = Math.ceil(filtered.length / appState.discItemsPerPage) || 1;
+    if (appState.discCurrentPage > totalPages) appState.discCurrentPage = totalPages;
+    if (appState.discCurrentPage < 1) appState.discCurrentPage = 1;
+
+    const startIdx = (appState.discCurrentPage - 1) * appState.discItemsPerPage;
+    const paginated = filtered.slice(startIdx, startIdx + appState.discItemsPerPage);
+
+    let rowsHtml = paginated.map(d => {
+        const badgeStyle = d.nucleo === 'Núcleo Básico'
+            ? 'background: #E0F2FE; color: #0284C7; border: 1px solid #BAE6FD;'
+            : 'background: #F3E8FF; color: #7E22CE; border: 1px solid #E9D5FF;';
+            
+        let cursosNomes = d.cursosIds.map(cid => {
+            const curso = mockCursosCadastrados.find(c => c.id === cid);
+            return curso ? curso.nome : '';
+        }).filter(n => n !== '').join('<br>• ');
+        
+        if (cursosNomes) cursosNomes = '• ' + cursosNomes;
+        else cursosNomes = '<span style="color: var(--text-muted); font-style: italic;">Nenhum curso vinculado</span>';
+
+        const isInactive = d.status === 'INATIVO';
+        const opacityStyle = isInactive ? 'opacity: 0.6;' : '';
+        const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
+
+        return `
+            <tr class="disciplina-row" data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
+                <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
+                <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
+                <td style="font-size: 0.85rem; line-height: 1.4; padding-top: 0.8rem; padding-bottom: 0.8rem;">${cursosNomes}</td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="window.editDisciplina(${d.id})">Editar</button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; color: #DC2626;" onclick="window.toggleStatusDisciplina(${d.id}, '${d.status}')">
+                            ${isInactive ? 'Ativar' : 'Inativar'}
+                        </button>
+                        <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #FECACA; background-color: #FEF2F2; color: #DC2626;" onclick="window.deleteDisciplina(${d.id})">
+                            Excluir
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (paginated.length === 0) {
+        rowsHtml = '<tr><td colspan="4" style="text-align:center; padding: 2rem; color: var(--text-muted);">Nenhuma disciplina encontrada com os filtros atuais.</td></tr>';
+    }
+
+    tbody.innerHTML = rowsHtml;
+
+    if (pagContainer) {
+        pagContainer.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 1rem; background: #F8FAFC; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <button class="outline-btn" ${appState.discCurrentPage === 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} onclick="window.prevDiscPage()">Anterior</button>
+                <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-main);">Página ${appState.discCurrentPage} de ${totalPages} <span style="color: var(--text-muted); font-weight: normal; margin-left: 0.5rem;">(${filtered.length} disciplinas)</span></span>
+                <button class="outline-btn" ${appState.discCurrentPage === totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} onclick="window.nextDiscPage()">Próxima</button>
+            </div>
+        `;
+    }
+};
 
 function renderEditProfileModal() {
     if (!appState.modalEditProfile) return '';
