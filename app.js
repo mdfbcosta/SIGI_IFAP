@@ -4566,7 +4566,7 @@ function renderModulo2() {
         const statusBadge = isInactive ? '<span style="background: #F1F5F9; color: #475569; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">Inativa</span>' : '';
 
         return `
-            <tr style="${opacityStyle}">
+            <tr class="disciplina-row" data-nome="${d.nome.replace(/"/g, '&quot;')}" style="${opacityStyle}">
                 <td style="font-weight: 500;">${d.codigo ? `<span style="color:var(--text-muted); font-size:0.8rem; margin-right: 0.3rem;">[${d.codigo}]</span>` : ''}${d.nome} ${statusBadge}</td>
                 <td><span style="padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; ${badgeStyle}">${d.nucleo}</span></td>
                 <td style="font-size: 0.85rem; line-height: 1.4; padding-top: 0.8rem; padding-bottom: 0.8rem;">${cursosNomes}</td>
@@ -4645,10 +4645,14 @@ function renderModulo2() {
             </div>
             <div style="padding: 1.5rem;">
                 <div class="table-responsive">
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                        <div style="flex: 1; max-width: 400px; position: relative;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted);">🔍</span>
+                            <input type="text" placeholder="Buscar disciplina por nome..." onkeyup="window.filterDisciplinasTable(this.value)" style="width: 100%; padding: 0.6rem 0.6rem 0.6rem 2.2rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                        </div>
                         <button class="nav-btn" onclick="window.openDisciplinaModal()">+ Nova Disciplina</button>
                     </div>
-                    <table class="perms-table">
+                    <table class="perms-table" id="disciplinas-table">
                         <thead>
                             <tr>
                                 <th style="text-align: left;">Nome da Disciplina</th>
@@ -5992,6 +5996,19 @@ window.filterServidoresTable = function(term) {
         const nome = row.getAttribute('data-nome').toLowerCase();
         const siape = row.getAttribute('data-siape').toLowerCase();
         if (nome.includes(term) || siape.includes(term)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+window.filterDisciplinasTable = function(term) {
+    term = term.toLowerCase();
+    const rows = document.querySelectorAll('#disciplinas-table tbody tr.disciplina-row');
+    rows.forEach(row => {
+        const nome = row.getAttribute('data-nome').toLowerCase();
+        if (nome.includes(term)) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
